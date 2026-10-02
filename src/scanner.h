@@ -4,9 +4,11 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-// Enumeration of all possible token types for the IFJ26 language.
-// TODO (Colleague 2 - Parser): You will use this enumeration in your recursive descent
-// for expected syntax checking (e.g., if (token.type == TOKEN_KW_DEF) ...).
+/**
+ * Enumeration of all possible token types for the IFJ26 language.
+ * TODO (Colleague 2 - Parser): You will use this enumeration in your recursive descent
+ * for expected syntax checking (e.g., if (token.type == TOKEN_KW_DEF) ...).
+ */
 typedef enum {
     TOKEN_EOF, // End of file (Parser stops analysis here)
     TOKEN_EOL, // End of logical line (statement separator, if not a semicolon)
@@ -44,9 +46,9 @@ typedef enum {
     TOKEN_EQ,     // ==
     TOKEN_NEQ,    // !=
     TOKEN_LT,     // <
-    TOKEN_LTE,    // <=
+    TOKEN_LEQ,    // <= (Renamed from TOKEN_LTE to match scanner.c)
     TOKEN_GT,     // >
-    TOKEN_GTE,    // >=
+    TOKEN_GEQ,    // >= (Renamed from TOKEN_GTE to match scanner.c)
     TOKEN_LPAREN, // (
     TOKEN_RPAREN, // )
     TOKEN_COLON,  // :
@@ -69,8 +71,7 @@ typedef struct {
     union {
         int    i_val; // Fill for TOKEN_INT_LITERAL
         double d_val; // Fill for TOKEN_DOUBLE_LITERAL
-        char  *s_val; // Fill for TOKEN_STRING_LITERAL and TOKEN_IDENTIFIER (must be dynamically
-                      // allocated!)
+        char  *s_val; // Fill for TOKEN_STRING_LITERAL and TOKEN_IDENTIFIER (must be dynamically allocated!)
     } attribute;
 } Token;
 
@@ -93,7 +94,7 @@ void scanner_init(FILE *source_file);
 int get_next_token(Token *token);
 
 /**
- * @brief Frees all dynamically allocated memory of the scanner (e.g., indentation stack).
+ * @brief Frees all dynamically allocated memory of the scanner (e.g., indentation stack, buffer).
  */
 void scanner_free(void);
 
