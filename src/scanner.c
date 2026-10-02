@@ -11,6 +11,7 @@ typedef enum {
     STATE_IDENTIFIER,
     STATE_NUMBER,
     STATE_STRING,
+    STATE_STRING_ESCAPE, // Added auxiliary state for escape sequences
     STATE_ASSIGN,
     STATE_SLASH,
     STATE_LINE_COMMENT,
@@ -27,7 +28,7 @@ typedef struct {
 static dynamic_string buffer;
 static FILE          *source = NULL;
 
-// Helper functions for dynamic buffer (implementation to be added for strings/numbers)
+// Helper functions for dynamic buffer
 static void dstring_init(dynamic_string *b) {
     b->text     = NULL;
     b->length   = 0;
@@ -126,6 +127,12 @@ int get_next_token(Token *token) {
             if (c == '\n') {
                 token->type = TOKEN_EOL;
                 return 0;
+            }
+
+            // String literals
+            if (c == '"') {
+                state = STATE_STRING;
+                break;
             }
 
             // Identifiers and keywords
@@ -258,14 +265,54 @@ int get_next_token(Token *token) {
             break;
 
         case STATE_NUMBER:
-            // TODO: Transitions for integers, dot, and exponents
+            // TODO: Transitions for integers, dot, and exponents (see previous design)
             break;
 
         case STATE_STRING:
-            // TODO: Processing of string literals
+            if (c == '"') {
+                // String is successfully terminated, copy it to the token
+                token->type            = TOKEN_STRING_LITERAL;
+                token->attribute.s_val = (char *)malloc(buffer.length + 1);
+                if (token->attribute.s_val != NULL) {
+                    strcpy(token->attribute.s_val, buffer.text);
+                    return 0; // Success
+                } else {
+                    return 1; // Internal allocation error
+                }
+            } else if (c == '\\') {
+                // Start of an escape sequence, switch to auxiliary state
+                state = STATE_STRING_ESCAPE;
+            } else if (c == '\n' || c == EOF) {
+                // Unterminated string is lexical error 1 according to specification
+                return 1;
+            } else {
+                // Regular character inside the string
+                dstring_append(&buffer, (char)c);
+            }
             break;
+
+        case STATE_STRING_ESCAPE:
+            // Evaluate the character immediately following the backslash
+            if (c == 'n') {
+                dstring_append(&buffer, '\n');
+            } else if (c == 'r') {
+                dstring_append(&buffer, '\r');
+            } else if (c == 't') {
+                dstring_append(&buffer, '\t');
+            } else if (c == '\\') {
+                dstring_append(&buffer, '\\');
+            } else if (c == '"') {
+                dstring_append(&buffer, '"');
+            } else {
+                // Unknown escape sequence leads to lexical error 1
+                return 1;
+            }
+            // After successful processing of escape sequence, return to string reading
+            state = STATE_STRING;
+            break;
+
         default:
-            return 1;
+            return 1; // Internal error (unknown DFA state)
         }
     }
 }
