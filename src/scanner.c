@@ -22,14 +22,12 @@ static int process_string(Token *token) { return 0; }
 // symbolů nebo binárního vyhledávání).
 static int process_identifier_or_keyword(int first_char, Token *token) { return 0; }
 
-void scanner_init(FILE *source_file)
-{
+void scanner_init(FILE *source_file) {
     source = source_file;
     // TODO: Inicializovat zásobník odsazení (vložit výchozí úroveň 0) a vynulovat stavové proměnné.
 }
 
-int get_next_token(Token *token)
-{
+int get_next_token(Token *token) {
     if (!source || !token) {
         return 1;
     }
@@ -43,7 +41,6 @@ int get_next_token(Token *token)
     return 0;
 }
 
-void scanner_free(void)
-{
+void scanner_free(void) {
     // TODO: Uvolnit paměť vyhrazenou pro zásobník odsazení a další statické struktury.
 }

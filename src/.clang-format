@@ -9,14 +9,9 @@ AlignConsecutiveAssignments: true
 AlignConsecutiveDeclarations: true
 AlignTrailingComments: true
 
-# Formátování závorek (Allman/BSD styl dává závorky na nový řádek – kód lépe dýchá)
-BreakBeforeBraces: Custom
-BraceWrapping:
-  AfterFunction: true
-  AfterControlStatement: false
-  AfterEnum: false
-  AfterStruct: false
+# Složené závorky VŽDY na stejném řádku (za funkcí, ifem, cyklem, enumem)
+BreakBeforeBraces: Attach
 
-# Mezery pro větší vzdušnost
+# Mezery pro přehlednost
 SpaceBeforeParens: ControlStatements
 SpacesInContainerLiterals: true
