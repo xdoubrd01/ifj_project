@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-// Definice stavů konečného automatu (DKA)
+// Definition of Finite State Machine (DFA) states
 typedef enum {
     STATE_START,
     STATE_IDENTIFIER,
@@ -17,7 +17,7 @@ typedef enum {
     STATE_BLOCK_COMMENT
 } ScannerState;
 
-// Základní struktura pro dynamický řetězec (buffer pro ukládání textu lexémů)
+// Basic structure for a dynamic string (buffer for storing lexeme text)
 typedef struct {
     char  *text;
     size_t length;
@@ -27,7 +27,7 @@ typedef struct {
 static dynamic_string buffer;
 static FILE          *source = NULL;
 
-// Pomocné funkce pro dynamický buffer (implementaci doplníme pro řetězce/čísla)
+// Helper functions for dynamic buffer (implementation to be added for strings/numbers)
 void dstring_init(dynamic_string *b) {
     b->text = NULL;
     b->length = 0;
@@ -44,7 +44,7 @@ void dstring_clear(dynamic_string *b) {
 void dstring_append(dynamic_string *b, char c) {
     (void)b;
     (void)c;
-    // TODO: Dynamická realokace paměti a připojení znaku
+    // TODO: Dynamic memory reallocation and character appending
 }
 
 void dstring_free(dynamic_string *b) {
@@ -59,12 +59,12 @@ void dstring_free(dynamic_string *b) {
 void scanner_init(FILE *source_file) {
     source = source_file;
     dstring_init(&buffer);
-    // TODO: Inicializace zásobníku pro sledování úrovní odsazení (indentace)
+    // TODO: Initialize stack for tracking indentation levels
 }
 
 int get_next_token(Token *token) {
     if (!source || !token) {
-        return 1; // Interní chyba
+        return 1; // Internal error
     }
 
     int  state = STATE_START;
@@ -83,28 +83,28 @@ int get_next_token(Token *token) {
                     return 0;
                 }
                 if (c == ' ') {
-                    continue; // Běžné mezery uvnitř řádku přeskakujeme
+                    continue; // Skip regular spaces within a line
                 }
                 if (c == '\n') {
                     token->type = TOKEN_EOL;
                     return 0;
                 }
 
-                // Identifikátory a klíčová slova
+                // Identifiers and keywords
                 if (isalpha(c) || c == '_') {
                     dstring_append(&buffer, (char)c);
                     state = STATE_IDENTIFIER;
                     break;
                 }
 
-                // Celočíselné a desetinné literály
+                // Integer and floating-point literals
                 if (isdigit(c)) {
                     dstring_append(&buffer, (char)c);
                     state = STATE_NUMBER;
                     break;
                 }
 
-                // Složené operátory a komentáře
+                // Compound operators and comments
                 if (c == '=') {
                     state = STATE_ASSIGN;
                     break;
@@ -114,7 +114,7 @@ int get_next_token(Token *token) {
                     break;
                 }
 
-                // Jednoznakové operátory
+                // Single-character operators
                 if (c == '+') {
                     token->type = TOKEN_PLUS;
                     return 0;
@@ -124,61 +124,61 @@ int get_next_token(Token *token) {
                     return 0;
                 }
 
-                return 1; // Neznámý znak -> lexikální chyba 1 podle specifikace
+                return 1; // Unknown character -> lexical error 1 according to specification
 
             case STATE_ASSIGN:
-                // Předchozí znak byl '='
+                // Previous character was '='
                 if (c == '=') {
                     token->type = TOKEN_EQ; // '=='
                 } else {
-                    ungetc(c, source);      // Vracíme nepoužitý znak
-                    token->type = TOKEN_ASSIGN; // Pouze '='
+                    ungetc(c, source);      // Return unused character
+                    token->type = TOKEN_ASSIGN; // Just '='
                 }
                 return 0;
 
             case STATE_SLASH:
-                // Předchozí znak byl '/'
+                // Previous character was '/'
                 if (c == '/') {
-                    state = STATE_LINE_COMMENT; // Řádkový komentář '//'
+                    state = STATE_LINE_COMMENT; // Line comment '//'
                     break;
                 } else if (c == '*') {
-                    state = STATE_BLOCK_COMMENT; // Blokový komentář '/*'
+                    state = STATE_BLOCK_COMMENT; // Block comment '/*'
                     comment_depth = 1;
                     contains_newline = false;
                     break;
                 } else {
                     ungetc(c, source);
-                    token->type = TOKEN_DIV; // Obyčejné dělení '/'
+                    token->type = TOKEN_DIV; // Standard division '/'
                     return 0;
                 }
 
             case STATE_LINE_COMMENT:
-                // Řádkový komentář končí koncem řádku (LF) nebo EOF
+                // Line comment ends with newline (LF) or EOF
                 if (c == '\n') {
-                    token->type = TOKEN_EOL; // Komentář se chová jako konec řádku
+                    token->type = TOKEN_EOL; // Comment acts as a newline
                     return 0;
                 } else if (c == EOF) {
                     token->type = TOKEN_EOF;
                     return 0;
                 }
-                break; // Všechny ostatní znaky v komentáři zahazujeme
+                break; // Discard all other characters in the comment
 
             case STATE_BLOCK_COMMENT:
                 if (c == EOF) {
-                    return 1; // Neukončený komentář -> lexikální chyba 1
+                    return 1; // Unterminated comment -> lexical error 1
                 } else if (c == '\n') {
-                    contains_newline = true; // Zaznamenáme nový řádek uvnitř komentáře
+                    contains_newline = true; // Record newline inside comment
                 } else if (c == '*') {
                     int next_c = fgetc(source);
                     if (next_c == '/') {
                         comment_depth--;
                         if (comment_depth == 0) {
-                            // Komentář zcela uzavřen
+                            // Comment fully closed
                             if (contains_newline) {
                                 token->type = TOKEN_EOL;
                                 return 0;
                             } else {
-                                state = STATE_START; // Funguje jako jeden bílý znak
+                                state = STATE_START; // Acts as a single white space
                                 break;
                             }
                         }
@@ -188,7 +188,7 @@ int get_next_token(Token *token) {
                 } else if (c == '/') {
                     int next_c = fgetc(source);
                     if (next_c == '*') {
-                        comment_depth++; // Vnořený komentář '/*'
+                        comment_depth++; // Nested comment '/*'
                     } else {
                         ungetc(next_c, source);
                     }
@@ -196,15 +196,15 @@ int get_next_token(Token *token) {
                 break;
 
             case STATE_IDENTIFIER:
-                // TODO: Přechody pro akumulaci zbytku identifikátoru a test na klíčová slova
+                // TODO: Transitions for accumulating identifier and keyword check
                 break;
 
             case STATE_NUMBER:
-                // TODO: Přechody pro celá čísla, tečku a exponenty
+                // TODO: Transitions for integers, dot, and exponents
                 break;
 
             case STATE_STRING:
-                // TODO: Zpracování řetězcových literálů
+                // TODO: Processing of string literals
                 break;
         }
     }
@@ -212,5 +212,5 @@ int get_next_token(Token *token) {
 
 void scanner_free(void) {
     dstring_free(&buffer);
-    // TODO: Dealokace paměti pro zásobník odsazení
+    // TODO: Deallocate memory for indentation stack
 }
