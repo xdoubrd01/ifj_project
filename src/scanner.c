@@ -10,8 +10,14 @@ typedef enum {
     STATE_START,
     STATE_IDENTIFIER,
     STATE_NUMBER,
+    STATE_NUMBER_ZERO,
+    STATE_NUMBER_FRACTION,
+    STATE_NUMBER_EXP,
+    STATE_NUMBER_EXP_SIGN,
+    STATE_NUMBER_EXP_DIGIT,
+    STATE_NUMBER_SUFFIX,
     STATE_STRING,
-    STATE_STRING_ESCAPE, // Added auxiliary state for escape sequences
+    STATE_STRING_ESCAPE,
     STATE_ASSIGN,
     STATE_SLASH,
     STATE_LINE_COMMENT,
@@ -57,6 +63,33 @@ static void dstring_free(dynamic_string *b) {
     b->capacity = 0;
 }
 
+// Helper function to convert a number with underscores to double
+static double convert_double_literal(const char *text) {
+    char temp[256];
+    int  j = 0;
+    for (int i = 0; text[i] != '\0' && j < 255; i++) {
+        // Skip underscores and optional d/D suffix
+        if (text[i] != '_' && text[i] != 'd' && text[i] != 'D') {
+            temp[j++] = text[i];
+        }
+    }
+    temp[j] = '\0';
+    return strtod(temp, NULL);
+}
+
+// Helper function to convert a number with underscores to int
+static int convert_int_literal(const char *text) {
+    char temp[256];
+    int  j = 0;
+    for (int i = 0; text[i] != '\0' && j < 255; i++) {
+        if (text[i] != '_') {
+            temp[j++] = text[i];
+        }
+    }
+    temp[j] = '\0';
+    return (int)strtol(temp, NULL, 10);
+}
+
 void scanner_init(FILE *source_file) {
     source = source_file;
     dstring_init(&buffer);
@@ -65,7 +98,6 @@ void scanner_init(FILE *source_file) {
 
 // Helper function to distinguish keywords and regular identifiers
 static TokenType resolve_identifier_or_keyword(const char *text) {
-    // Keyword check
     if (!strcmp(text, "def"))
         return TOKEN_KW_DEF;
     if (!strcmp(text, "do"))
@@ -87,7 +119,6 @@ static TokenType resolve_identifier_or_keyword(const char *text) {
     if (!strcmp(text, "while"))
         return TOKEN_KW_WHILE;
 
-    // Data types check
     if (!strcmp(text, "Int"))
         return TOKEN_TYPE_INT;
     if (!strcmp(text, "Double"))
@@ -97,7 +128,6 @@ static TokenType resolve_identifier_or_keyword(const char *text) {
     if (!strcmp(text, "Unit"))
         return TOKEN_TYPE_UNIT;
 
-    // If no match occurred, it is a regular identifier
     return TOKEN_IDENTIFIER;
 }
 
@@ -122,7 +152,7 @@ int get_next_token(Token *token) {
                 return 0;
             }
             if (c == ' ') {
-                continue; // Skip regular spaces within a line
+                continue;
             }
             if (c == '\n') {
                 token->type = TOKEN_EOL;
@@ -143,7 +173,12 @@ int get_next_token(Token *token) {
             }
 
             // Integer and floating-point literals
-            if (isdigit(c)) {
+            if (c == '0') {
+                dstring_append(&buffer, (char)c);
+                state = STATE_NUMBER_ZERO;
+                break;
+            }
+            if (isdigit(c)) { // 1-9
                 dstring_append(&buffer, (char)c);
                 state = STATE_NUMBER;
                 break;
@@ -169,61 +204,57 @@ int get_next_token(Token *token) {
                 return 0;
             }
 
-            return 1; // Unknown character -> lexical error 1 according to specification
+            return 1;
 
         case STATE_ASSIGN:
-            // Previous character was '='
             if (c == '=') {
-                token->type = TOKEN_EQ; // '=='
+                token->type = TOKEN_EQ;
             } else {
-                ungetc(c, source);          // Return unused character
-                token->type = TOKEN_ASSIGN; // Just '='
+                ungetc(c, source);
+                token->type = TOKEN_ASSIGN;
             }
             return 0;
 
         case STATE_SLASH:
-            // Previous character was '/'
             if (c == '/') {
-                state = STATE_LINE_COMMENT; // Line comment '//'
+                state = STATE_LINE_COMMENT;
                 break;
             } else if (c == '*') {
-                state            = STATE_BLOCK_COMMENT; // Block comment '/*'
+                state            = STATE_BLOCK_COMMENT;
                 comment_depth    = 1;
                 contains_newline = false;
                 break;
             } else {
                 ungetc(c, source);
-                token->type = TOKEN_DIV; // Standard division '/'
+                token->type = TOKEN_DIV;
                 return 0;
             }
 
         case STATE_LINE_COMMENT:
-            // Line comment ends with newline (LF) or EOF
             if (c == '\n') {
-                token->type = TOKEN_EOL; // Comment acts as a newline
+                token->type = TOKEN_EOL;
                 return 0;
             } else if (c == EOF) {
                 token->type = TOKEN_EOF;
                 return 0;
             }
-            break; // Discard all other characters in the comment
+            break;
 
         case STATE_BLOCK_COMMENT:
             if (c == EOF) {
-                return 1; // Unterminated comment -> lexical error 1
+                return 1;
             } else if (c == '\n') {
-                contains_newline = true; // Record newline inside comment
+                contains_newline = true;
             } else if (c == '*') {
                 int next_c = fgetc(source);
                 if (next_c == '/') {
                     comment_depth--;
                     if (comment_depth == 0) {
-                        // Comment fully closed
                         if (contains_newline) {
                             token->type = TOKEN_EOL;
                             return 0;
                         } else {
-                            state = STATE_START; // Acts as a single white space
+                            state = STATE_START;
                             break;
                         }
                     }
@@ -233,7 +264,7 @@ int get_next_token(Token *token) {
             } else if (c == '/') {
                 int next_c = fgetc(source);
                 if (next_c == '*') {
-                    comment_depth++; // Nested comment '/*'
+                    comment_depth++;
                 } else {
                     ungetc(next_c, source);
                 }
@@ -241,58 +272,157 @@ int get_next_token(Token *token) {
             break;
 
         case STATE_IDENTIFIER:
-            // While reading letters, numbers, or underscore, append to buffer
             if (isalnum(c) || c == '_') {
                 dstring_append(&buffer, (char)c);
             } else {
-                // Character no longer belongs to identifier, return it to input
                 ungetc(c, source);
 
-                // Determine if it is a keyword or an identifier
                 token->type = resolve_identifier_or_keyword(buffer.text);
 
-                // If it is a regular identifier, we must copy the text (dynamic allocation)
                 if (token->type == TOKEN_IDENTIFIER) {
                     token->attribute.s_val = (char *)malloc(buffer.length + 1);
                     if (token->attribute.s_val != NULL) {
                         strcpy(token->attribute.s_val, buffer.text);
                     } else {
-                        return 1; // Internal memory allocation error
+                        return 1;
                     }
                 }
-                return 0; // Token is successfully prepared
+                return 0;
+            }
+            break;
+
+        // --- NUMBER STATES ---
+        case STATE_NUMBER_ZERO:
+            if (c == '.') {
+                dstring_append(&buffer, (char)c);
+                state = STATE_NUMBER_FRACTION;
+            } else if (c == 'e' || c == 'E') {
+                dstring_append(&buffer, (char)c);
+                state = STATE_NUMBER_EXP;
+            } else if (c == 'd' || c == 'D') {
+                dstring_append(&buffer, (char)c);
+                state = STATE_NUMBER_SUFFIX;
+            } else if (isdigit(c)) {
+                return 1; // Error: Non-zero number cannot start with zero
+            } else if (isalpha(c) || c == '_') {
+                return 1; // Invalid character attached to a number
+            } else {
+                ungetc(c, source);
+                token->type            = TOKEN_INT_LITERAL;
+                token->attribute.i_val = 0;
+                return 0;
             }
             break;
 
         case STATE_NUMBER:
-            // TODO: Transitions for integers, dot, and exponents (see previous design)
+            if (isdigit(c) || c == '_') {
+                dstring_append(&buffer, (char)c);
+            } else if (c == '.') {
+                dstring_append(&buffer, (char)c);
+                state = STATE_NUMBER_FRACTION;
+            } else if (c == 'e' || c == 'E') {
+                dstring_append(&buffer, (char)c);
+                state = STATE_NUMBER_EXP;
+            } else if (c == 'd' || c == 'D') {
+                dstring_append(&buffer, (char)c);
+                state = STATE_NUMBER_SUFFIX;
+            } else if (isalpha(c)) {
+                return 1;
+            } else {
+                ungetc(c, source);
+                token->type            = TOKEN_INT_LITERAL;
+                token->attribute.i_val = convert_int_literal(buffer.text);
+                return 0;
+            }
             break;
 
+        case STATE_NUMBER_FRACTION:
+            if (isdigit(c) || c == '_') {
+                dstring_append(&buffer, (char)c);
+            } else if (c == 'e' || c == 'E') {
+                dstring_append(&buffer, (char)c);
+                state = STATE_NUMBER_EXP;
+            } else if (c == 'd' || c == 'D') {
+                dstring_append(&buffer, (char)c);
+                state = STATE_NUMBER_SUFFIX;
+            } else if (isalpha(c)) {
+                return 1;
+            } else {
+                ungetc(c, source);
+                token->type            = TOKEN_DOUBLE_LITERAL;
+                token->attribute.d_val = convert_double_literal(buffer.text);
+                return 0;
+            }
+            break;
+
+        case STATE_NUMBER_EXP:
+            if (c == '+' || c == '-') {
+                dstring_append(&buffer, (char)c);
+                state = STATE_NUMBER_EXP_SIGN;
+            } else if (isdigit(c)) {
+                dstring_append(&buffer, (char)c);
+                state = STATE_NUMBER_EXP_DIGIT;
+            } else {
+                return 1;
+            }
+            break;
+
+        case STATE_NUMBER_EXP_SIGN:
+            if (isdigit(c)) {
+                dstring_append(&buffer, (char)c);
+                state = STATE_NUMBER_EXP_DIGIT;
+            } else {
+                return 1;
+            }
+            break;
+
+        case STATE_NUMBER_EXP_DIGIT:
+            if (isdigit(c) || c == '_') {
+                dstring_append(&buffer, (char)c);
+            } else if (c == 'd' || c == 'D') {
+                dstring_append(&buffer, (char)c);
+                state = STATE_NUMBER_SUFFIX;
+            } else if (isalpha(c)) {
+                return 1;
+            } else {
+                ungetc(c, source);
+                token->type            = TOKEN_DOUBLE_LITERAL;
+                token->attribute.d_val = convert_double_literal(buffer.text);
+                return 0;
+            }
+            break;
+
+        case STATE_NUMBER_SUFFIX:
+            if (isalpha(c) || isdigit(c) || c == '_') {
+                return 1;
+            } else {
+                ungetc(c, source);
+                token->type            = TOKEN_DOUBLE_LITERAL;
+                token->attribute.d_val = convert_double_literal(buffer.text);
+                return 0;
+            }
+
+        // --- STRING STATES ---
         case STATE_STRING:
             if (c == '"') {
-                // String is successfully terminated, copy it to the token
                 token->type            = TOKEN_STRING_LITERAL;
                 token->attribute.s_val = (char *)malloc(buffer.length + 1);
                 if (token->attribute.s_val != NULL) {
                     strcpy(token->attribute.s_val, buffer.text);
-                    return 0; // Success
+                    return 0;
                 } else {
-                    return 1; // Internal allocation error
+                    return 1;
                 }
             } else if (c == '\\') {
-                // Start of an escape sequence, switch to auxiliary state
                 state = STATE_STRING_ESCAPE;
             } else if (c == '\n' || c == EOF) {
-                // Unterminated string is lexical error 1 according to specification
                 return 1;
             } else {
-                // Regular character inside the string
                 dstring_append(&buffer, (char)c);
             }
             break;
 
         case STATE_STRING_ESCAPE:
-            // Evaluate the character immediately following the backslash
             if (c == 'n') {
                 dstring_append(&buffer, '\n');
             } else if (c == 'r') {
@@ -304,10 +434,8 @@ int get_next_token(Token *token) {
             } else if (c == '"') {
                 dstring_append(&buffer, '"');
             } else {
-                // Unknown escape sequence leads to lexical error 1
                 return 1;
             }
-            // After successful processing of escape sequence, return to string reading
             state = STATE_STRING;
             break;
 
