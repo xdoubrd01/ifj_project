@@ -10,32 +10,32 @@ unsigned long hash_djb2(const char *str) {
     return hash;
 }
 
-// TODO: Implementovat alokaci paměti pro pole `items` a nastavit počáteční stavy buněk na `empty`.
+// TODO: Implement memory allocation for the `items` array and set initial cell states to `empty`.
 void ht_init(hashtable *table, size_t initial_capacity) {
-    // Implementace zde
+    // Implementation here
 }
 
-// TODO: Implementovat zvětšení tabulky (rehashování) při překročení povoleného load factoru
-// (zabrání degradaci výkonu u otevřené adresace).
+// TODO: Implement table resizing (rehashing) when the allowed load factor is exceeded
+// (prevents performance degradation in open addressing).
 static void ht_resize(hashtable *table) {
-    // Implementace zde
+    // Implementation here
 }
 
-// TODO: Implementovat vkládání položky s řešením kolizí pomocí otevřené adresace (linear/quadratic
+// TODO: Implement item insertion with collision resolution using open addressing (linear/quadratic
 // probing).
 bool ht_insert(hashtable *table, const char *key, void *data) {
-    // Implementace zde
+    // Implementation here
     return false;
 }
 
-// TODO: Implementovat vyhledávání položky podle klíče, pamatovat na přeskakování `dead` buněk.
+// TODO: Implement item search by key, remember to skip `dead` cells.
 void *ht_search(hashtable *table, const char *key) {
-    // Implementace zde
+    // Implementation here
     return NULL;
 }
 
-// TODO: Implementovat bezpečné uvolnění všech alokovaných klíčů, uložených datových struktur a
-// samotného pole.
+// TODO: Implement safe deallocation of all allocated keys, stored data structures, and
+// the array itself.
 void ht_free(hashtable *table) {
-    // Implementace zde
+    // Implementation here
 }

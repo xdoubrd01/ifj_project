@@ -4,20 +4,20 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-// Výčet všech možných typů tokenů pro jazyk IFJ26.
-// TODO (Kolega 2 - Parser): Tento výčet budeš používat ve svém rekurzivním sestupu
-// pro kontrolu očekávané syntaxe (např. if (token.type == TOKEN_KW_DEF) ...).
+// Enumeration of all possible token types for the IFJ26 language.
+// TODO (Colleague 2 - Parser): You will use this enumeration in your recursive descent
+// for expected syntax checking (e.g., if (token.type == TOKEN_KW_DEF) ...).
 typedef enum {
-    TOKEN_EOF, // Konec souboru (Parser zde ukončí analýzu)
-    TOKEN_EOL, // Konec logického řádku (oddělovač příkazů, pokud není středník)
+    TOKEN_EOF, // End of file (Parser stops analysis here)
+    TOKEN_EOL, // End of logical line (statement separator, if not a semicolon)
 
-    // Identifikátory a literály
-    TOKEN_IDENTIFIER,     // např. nazev_promenne, jmeno_funkce
-    TOKEN_INT_LITERAL,    // Celočíselný literál (např. 42)
-    TOKEN_DOUBLE_LITERAL, // Desetinný literál (např. 3.14, 1e-5)
-    TOKEN_STRING_LITERAL, // Řetězcový literál (vč. víceřádkových a escape sekvencí)
+    // Identifiers and literals
+    TOKEN_IDENTIFIER,     // e.g., variable_name, function_name
+    TOKEN_INT_LITERAL,    // Integer literal (e.g., 42)
+    TOKEN_DOUBLE_LITERAL, // Decimal literal (e.g., 3.14, 1e-5)
+    TOKEN_STRING_LITERAL, // String literal (incl. multiline and escape sequences)
 
-    // Klíčová slova jazyka IFJ26
+    // IFJ26 language keywords
     TOKEN_KW_DEF,
     TOKEN_KW_DO,
     TOKEN_KW_ELSE,
@@ -29,13 +29,13 @@ typedef enum {
     TOKEN_KW_WHILE,
     TOKEN_KW_IMPORT,
 
-    // Datové typy
+    // Data types
     TOKEN_TYPE_INT,
     TOKEN_TYPE_DOUBLE,
     TOKEN_TYPE_STRING,
     TOKEN_TYPE_UNIT,
 
-    // Operátory a oddělovače
+    // Operators and separators
     TOKEN_ASSIGN, // =
     TOKEN_PLUS,   // +
     TOKEN_MINUS,  // -
@@ -52,48 +52,48 @@ typedef enum {
     TOKEN_COLON,  // :
     TOKEN_COMMA,  // ,
 
-    // Speciální tokeny pro řízení bloků pomocí odsazení mezerami.
-    // TODO (Kolega 1 - Lexer): Tyto tokeny musíš generovat automaticky při změně počtu
-    // mezer na začátku nového logického řádku, protože IFJ26 nepoužívá složené závorky.
-    TOKEN_INDENT, // Zvětšení úrovně odsazení (otevření bloku)
-    TOKEN_DEDENT  // Zmenšení úrovně odsazení (uzavření bloku)
+    // Special tokens for block control using space indentation.
+    // TODO (Colleague 1 - Lexer): You must generate these tokens automatically when the number
+    // of spaces changes at the beginning of a new logical line, because IFJ26 does not use curly braces.
+    TOKEN_INDENT, // Increase indentation level (block open)
+    TOKEN_DEDENT  // Decrease indentation level (block close)
 } TokenType;
 
-// Struktura reprezentující lexikální jednotku (token).
-// TODO (Kolega 1 - Lexer): Ujisti se, že při vrácení tokenu správně naplníš atribut `attribute`,
-// pokud se jedná o literál nebo identifikátor. Pro operátory a klíčová slova atribut nevyplňuj.
+// Structure representing a lexical unit (token).
+// TODO (Colleague 1 - Lexer): Ensure you correctly fill the `attribute` when returning a token
+// if it's a literal or identifier. Do not fill the attribute for operators and keywords.
 typedef struct {
-    TokenType type; // Typ tokenu
+    TokenType type; // Token type
 
-    // Atribut tokenu (přídavná hodnota nesoucí sémantickou informaci)
+    // Token attribute (additional value carrying semantic information)
     union {
-        int    i_val; // Vyplň pro TOKEN_INT_LITERAL
-        double d_val; // Vyplň pro TOKEN_DOUBLE_LITERAL
-        char  *s_val; // Vyplň pro TOKEN_STRING_LITERAL a TOKEN_IDENTIFIER (musí být dynamicky
-                      // alokováno!)
+        int    i_val; // Fill for TOKEN_INT_LITERAL
+        double d_val; // Fill for TOKEN_DOUBLE_LITERAL
+        char  *s_val; // Fill for TOKEN_STRING_LITERAL and TOKEN_IDENTIFIER (must be dynamically
+                      // allocated!)
     } attribute;
 } Token;
 
 /**
- * @brief Inicializuje lexikální analyzátor.
- * @param source_file Ukazatel na otevřený soubor se zdrojovým kódem IFJ26.
+ * @brief Initializes the lexical analyzer.
+ * @param source_file Pointer to the open IFJ26 source code file.
  */
 void scanner_init(FILE *source_file);
 
 /**
- * @brief Hlavní komunikační funkce pro Parser (Kolegu 2).
- * Přečte další lexém ze vstupu a naplní jím předanou strukturu Token.
+ * @brief Main communication function for the Parser (Colleague 2).
+ * Reads the next lexeme from the input and fills the provided Token structure with it.
  *
- * TODO (Kolega 2 - Parser): Tuto funkci budeš volat v cyklu nebo na začátku
- * každé funkce rekurzivního sestupu, abys zjistil, jaký prvek následuje.
+ * TODO (Colleague 2 - Parser): You will call this function in a loop or at the beginning of
+ * every recursive descent function to determine the next element.
  *
- * @param token Ukazatel na strukturu, do které se zapíše výsledek.
- * @return Hodnota 0 při úspěchu, chybový kód 1 při lexikální chybě (např. neznámý znak).
+ * @param token Pointer to the structure where the result will be written.
+ * @return Value 0 on success, error code 1 on lexical error (e.g., unknown character).
  */
 int get_next_token(Token *token);
 
 /**
- * @brief Uvolní veškerou dynamicky alokovanou paměť skeneru (např. zásobník odsazení).
+ * @brief Frees all dynamically allocated memory of the scanner (e.g., indentation stack).
  */
 void scanner_free(void);
 

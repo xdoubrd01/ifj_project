@@ -8,18 +8,18 @@ typedef enum { type_int, type_double, type_string, type_unit } data_type;
 
 typedef enum { sym_var, sym_func } symbol_type;
 
-// Optimalizovaná specifická data pro symbol
+// Optimized specific data for a symbol
 typedef struct {
-    symbol_type type; // Určuje typ symbolu (proměnná vs. funkce)
+    symbol_type type; // Determines the symbol type (variable vs. function)
 
     union {
-        // Atributy proměnné
+        // Variable attributes
         struct {
             data_type var_type;
             bool      is_mutable;
         } var;
 
-        // Atributy funkce
+        // Function attributes
         struct {
             data_type  ret_type;
             int        param_count;
@@ -28,7 +28,7 @@ typedef struct {
     } data;
 } symbol_data;
 
-// Rozhraní tabulky symbolů pro zbytek překladače
+// Symbol table interface for the rest of the compiler
 void symtable_init(hashtable *ts, size_t initial_capacity);
 bool symtable_insert_var(hashtable *ts, const char *key, data_type type, bool is_mutable);
 bool symtable_insert_func(hashtable *ts, const char *key, data_type ret_type, int param_count,
