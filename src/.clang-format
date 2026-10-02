@@ -1,0 +1,22 @@
+BasedOnStyle: LLVM
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 100
+
+# Zarovnání operátorů, přiřazení a komentářů do sloupců
+AlignConsecutiveAssignments: true
+AlignConsecutiveDeclarations: true
+AlignTrailingComments: true
+
+# Formátování závorek (Allman/BSD styl dává závorky na nový řádek – kód lépe dýchá)
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterFunction: true
+  AfterControlStatement: false
+  AfterEnum: false
+  AfterStruct: false
+
+# Mezery pro větší vzdušnost
+SpaceBeforeParens: ControlStatements
+SpacesInContainerLiterals: true
