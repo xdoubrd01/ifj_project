@@ -399,6 +399,31 @@ int get_next_token(Token *token) {
                 return 0;
             }
 
+            // Dot operator (e.g., for method or attribute access like x.toString)
+            if (c == '.') {
+                token->type = TOKEN_DOT;
+                return 0;
+            }
+
+            // Semicolon (command separator on the same logical line)
+            if (c == ';') {
+                token->type = TOKEN_SEMICOLON;
+                return 0;
+            }
+
+            // @main annotation evaluation
+            if (c == '@') {
+                const char *expected_main = "main";
+                for (int i = 0; i < 4; i++) {
+                    int next_c = fgetc(source);
+                    if (next_c != expected_main[i]) {
+                        return 1; // Lexical error: Only @main is allowed according to spec
+                    }
+                }
+                token->type = TOKEN_AT_MAIN;
+                return 0;
+            }
+
             return 1; // Illegal character encountered
 
         /* STATE_ASSIGN: Disambiguates assignment '=' from logical equality '==' */

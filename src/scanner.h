@@ -46,24 +46,25 @@ typedef enum {
     TOKEN_EQ,     // ==
     TOKEN_NEQ,    // !=
     TOKEN_LT,     // <
-    TOKEN_LEQ,    // <= (Renamed from TOKEN_LTE to match scanner.c)
+    TOKEN_LEQ,    // <=
     TOKEN_GT,     // >
-    TOKEN_GEQ,    // >= (Renamed from TOKEN_GTE to match scanner.c)
+    TOKEN_GEQ,    // >=
     TOKEN_LPAREN, // (
     TOKEN_RPAREN, // )
     TOKEN_COLON,  // :
     TOKEN_COMMA,  // ,
 
+    // Tokens added for full IFJ26 specification support
+    TOKEN_DOT,       // .
+    TOKEN_SEMICOLON, // ;
+    TOKEN_AT_MAIN,   // @main
+
     // Special tokens for block control using space indentation.
-    // TODO (Colleague 1 - Lexer): You must generate these tokens automatically when the number
-    // of spaces changes at the beginning of a new logical line, because IFJ26 does not use curly braces.
     TOKEN_INDENT, // Increase indentation level (block open)
     TOKEN_DEDENT  // Decrease indentation level (block close)
 } TokenType;
 
 // Structure representing a lexical unit (token).
-// TODO (Colleague 1 - Lexer): Ensure you correctly fill the `attribute` when returning a token
-// if it's a literal or identifier. Do not fill the attribute for operators and keywords.
 typedef struct {
     TokenType type; // Token type
 
@@ -71,7 +72,7 @@ typedef struct {
     union {
         int    i_val; // Fill for TOKEN_INT_LITERAL
         double d_val; // Fill for TOKEN_DOUBLE_LITERAL
-        char  *s_val; // Fill for TOKEN_STRING_LITERAL and TOKEN_IDENTIFIER (must be dynamically allocated!)
+        char  *s_val; // Fill for TOKEN_STRING_LITERAL and TOKEN_IDENTIFIER
     } attribute;
 } Token;
 
@@ -84,9 +85,6 @@ void scanner_init(FILE *source_file);
 /**
  * @brief Main communication function for the Parser (Colleague 2).
  * Reads the next lexeme from the input and fills the provided Token structure with it.
- *
- * TODO (Colleague 2 - Parser): You will call this function in a loop or at the beginning of
- * every recursive descent function to determine the next element.
  *
  * @param token Pointer to the structure where the result will be written.
  * @return Value 0 on success, error code 1 on lexical error (e.g., unknown character).
