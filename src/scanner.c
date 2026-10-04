@@ -399,6 +399,21 @@ int get_next_token(Token *token) {
                 return 0;
             }
 
+            if (c == ';') {
+                token->type = TOKEN_SEMICOL;
+                return 0;
+            }
+
+            if (c == '@') {
+                token->type = TOKEN_AT;
+                return 0;
+            }
+
+            if (c == '.') {
+                token->type = TOKEN_DOT; 
+                return 0;
+            }
+
             return 1; // Illegal character encountered
 
         /* STATE_ASSIGN: Disambiguates assignment '=' from logical equality '==' */

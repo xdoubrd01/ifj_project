@@ -53,6 +53,9 @@ typedef enum {
     TOKEN_RPAREN, // )
     TOKEN_COLON,  // :
     TOKEN_COMMA,  // ,
+    TOKEN_DOT,    // . 
+    TOKEN_AT,     // @
+    TOKEN_SEMICOL,// ;
 
     // Special tokens for block control using space indentation.
     // TODO (Colleague 1 - Lexer): You must generate these tokens automatically when the number
