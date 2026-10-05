@@ -4,20 +4,20 @@
 #include <stdlib.h>
 #include <string.h>
 
-static Token tok;   // current token
+static Token tok; // current token
 
 static void advance(void) {
-    if (tok.type == TOKEN_IDENTIFIER || tok.type == TOKEN_STRING_LITERAL ){
+    if (tok.type == TOKEN_IDENTIFIER || tok.type == TOKEN_STRING_LITERAL) {
         free(tok.attribute.s_val);
     }
     int rc = get_next_token(&tok);
     if (rc != 0) {
         scanner_free();
-        exit(rc);   // 1 lexical error, 99 intern error
+        exit(rc); // 1 lexical error, 99 intern error
     }
 }
 
-void syntax_error(){
+void syntax_error() {
     fprintf(stderr, "Syntax error\n");
     scanner_free();
     exit(2);
@@ -37,18 +37,18 @@ void parse(void) {
     /* parse_program(); */
 }
 
-static void parse_prolog(void){
+static void parse_prolog(void) {
     expect(TOKEN_KW_IMPORT);
-    if (tok.type == TOKEN_IDENTIFIER && strcmp(tok.attribute.s_val, "ifj26") == 0){
+    if (tok.type == TOKEN_IDENTIFIER && strcmp(tok.attribute.s_val, "ifj26") == 0) {
         advance();
         expect(TOKEN_DOT);
         expect(TOKEN_MUL);
         expect(TOKEN_EOL);
     }
 
-    else{ syntax_error();
+    else {
+        syntax_error();
     }
-
 }
 
 /*
@@ -77,48 +77,48 @@ static void parse_expression(void);
 
 /* 2. PROGRAM -> PROLOG FUNCTIONS EOF */
 static void parse_program(void) {
-    /* TODO: parse_prolog(); parse_functions(); expect(TOKEN_EOF); */
+    parse_prolog();
+    parse_functions();
+    expect(TOKEN_EOF);
 }
 
 /* 3. FUNCTIONS -> FUNCTION FUNCTIONS
  * 4. FUNCTIONS -> eps */
-static void parse_functions(void) {
-    /* TODO: loop while tok.type is in FIRST(FUNCTION), call parse_function() */
-}
+static void parse_functions(void) {}
 
 /* 5. OPT_ANNOTATION -> AT IDENTIFIER OPT_EOL
  * 6. OPT_ANNOTATION -> eps
  * NOTE: the identifier must be "main" (check s_val, mind who frees it) */
 static void parse_opt_annotation(void) {
-    /* TODO */
+    if (tok.type == TOKEN_AT)
+        advance();
+    if (tok.type == TOKEN_IDENTIFIER && strcmp(tok.attribute.s_val, "main") == 0) {
+        advance();
+        parse_opt_eol();
+    } else {
+        syntax_error();
+    }
 }
 
 /* 7. OPT_EOL -> EOL
  * 8. OPT_EOL -> eps */
 static void parse_opt_eol(void) {
-    /* TODO */
+    if (tok.type == TOKEN_EOL)
+        advance();
 }
 
 /* 9. FUNCTION -> OPT_ANNOTATION KW_DEF IDENTIFIER LPAREN RPAREN COLON TYPE ASSIGN EOL BLOCK */
-static void parse_function(void) {
-    /* TODO */
-}
+static void parse_function(void) { /* TODO */ }
 
 /* 10. BLOCK -> INDENT STMT STMTS DEDENT */
-static void parse_block(void) {
-    /* TODO */
-}
+static void parse_block(void) { /* TODO */ }
 
 /* 11-14. TYPE -> TYPE_INT | TYPE_DOUBLE | TYPE_STRING | TYPE_UNIT */
-static void parse_type(void) {
-    /* TODO: switch on tok.type, default -> syntax_error() */
-}
+static void parse_type(void) { /* TODO: switch on tok.type, default -> syntax_error() */ }
 
 /* 15. STMTS -> STMT STMTS
  * 16. STMTS -> eps */
-static void parse_stmts(void) {
-    /* TODO: loop while tok.type is in FIRST(STMT) */
-}
+static void parse_stmts(void) { /* TODO: loop while tok.type is in FIRST(STMT) */ }
 
 /* 17. STMT -> KW_VAR IDENTIFIER OPT_TYPE ASSIGN EXPRESSION EOL
  * 18. STMT -> KW_VAL IDENTIFIER OPT_TYPE ASSIGN EXPRESSION EOL
@@ -129,11 +129,7 @@ static void parse_stmt(void) {
 
 /* 19. OPT_TYPE -> COLON TYPE
  * 20. OPT_TYPE -> eps */
-static void parse_opt_type(void) {
-    /* TODO */
-}
+static void parse_opt_type(void) { /* TODO */ }
 
 /* Temporary stand-in for the expression module: accept a single literal or identifier. */
-static void parse_expression(void) {
-    /* TODO: replace with Kuba's precedence analysis */
-}
+static void parse_expression(void) { /* TODO: replace with Kuba's precedence analysis */ }
