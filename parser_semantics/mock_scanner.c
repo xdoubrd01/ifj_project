@@ -1,12 +1,16 @@
-#include scanner.h
+#include "mock_scanner.h" 
 
-int current_mock_index = 0; // Index of the current token in the mock token array
+// Mock scanner implementation for testing the precedence parser
 Token mock_tokens[] = {
-    {TOKEN_ID, "a"}, 
-    {TOKEN_PLUS, "+"}, 
-    {TOKEN_INT_LITERAL, "5"}, 
-    {TOKEN_EOF, ""}
+    { .type = TOKEN_INT_LITERAL, .attribute.i_val = 5 },
+    { .type = TOKEN_PLUS },
+    { .type = TOKEN_IDENTIFIER, .attribute.s_val = "x" },
+    { .type = TOKEN_EOF }
 };
+int current_mock_index = 0;
 
-Token get_next_token() {
-    return mock_tokens[current_mock_index++]; }
+// Function to get the next token from the mock scanner
+int get_next_token(Token *token) {
+    *token = mock_tokens[current_mock_index++];
+    return 0; // 0 indicates success
+}

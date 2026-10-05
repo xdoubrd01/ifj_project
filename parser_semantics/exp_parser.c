@@ -69,3 +69,54 @@ char prec_table[8][8] = {
     { '>', '>', '>', '>', 'E', '>', 'E', '>' }, // value
     { '<', '<', '<', '<', '<', 'E', '<', 'E' }  // EOF
 }
+
+//STACK IMPLEMENTATION FOR PRECEDENCE PARSER
+
+//type of symbol in the stack, either terminal or non-terminal
+typedef enum {
+    SYM_TERMINAL, // Terminal symbol (operator or operand)
+    SYM_NON_TERMINAL, // Non-terminal symbol (result of a reduction)
+    SYM_STOP // Special symbol to indicate the bottom or start of the stack
+} Symbol_type;
+
+// Structure representing an item in the precedence parser's stack
+typedef struct {
+    Symbol_type type; 
+    Tokentype token_type;      // The token associated with the symbol
+
+    // TO DO: Add any additional fields needed for the stack item
+
+} Stack_Item;
+
+#define STACK_MAX_SIZE 100 // Maximum size of the stack
+Stack_Item stack[STACK_MAX_SIZE]; // Stack for the precedence parser
+int stack_top = -1; // Index of the top of the stack
+
+void push(Stack_Item item) {
+    if (stack_top < STACK_MAX_SIZE - 1) {
+        stack[++stack_top] = item;
+    } else {
+        fprintf(stderr, "Stack overflow\n");
+        exit(99);
+    }
+}
+
+Stack_Item pop() {
+    if (stack_top >= 0) {
+        return stack[stack_top--];
+    } else {
+        fprintf(stderr, "Stack underflow\n");
+        exit(99);
+    }
+}
+
+Stack_Item top() {
+    if (stack_top >= 0) {
+        return stack[stack_top];
+    } else {
+        fprintf(stderr, "Stack is empty\n");
+        exit(99);
+    }
+}
+
+// END OF STACK IMPLEMENTATION FOR PRECEDENCE PARSER
