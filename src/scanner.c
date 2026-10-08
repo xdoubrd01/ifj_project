@@ -155,7 +155,14 @@ static int convert_double(const char *text, double *out) {
     char  *end   = NULL;
     double value = strtod(tmp.text != NULL ? tmp.text : "0", &end);
 
-    if (errno == ERANGE || !isfinite(value) || end == NULL || *end != '\0') {
+    /*
+     * AI-assisted modification.
+     * Prompt: "Dej mi opravený scanner.c, aby splňoval veškeré potřeby základního zadání"
+     * Accept representable binary64 subnormal values even if strtod() reports ERANGE,
+     * but reject overflow and values that underflow completely to zero.
+     */
+    if (!isfinite(value) || end == NULL || *end != '\0' ||
+        (errno == ERANGE && value == 0.0)) {
         ds_free(&tmp);
         return 1;
     }
@@ -211,6 +218,13 @@ static int consume_block_comment(bool *had_newline) {
  * only whitespace may occur before the physical LF/EOF.
  */
 static int finish_multiline_comment(Token *token) {
+    /*
+     * AI-assisted modification.
+     * Prompt: "Dej mi opravený scanner.c, aby splňoval veškeré potřeby základního zadání"
+     * A multiline block comment behaves as one EOL. Inside parentheses that EOL is
+     * whitespace, but it still starts a continuation physical line whose indentation
+     * must be checked by handle_line_start().
+     */
     int c;
     do {
         c = fgetc(source);
@@ -220,16 +234,17 @@ static int finish_multiline_comment(Token *token) {
         return 1;
     }
 
-    at_line_start     = true;
-    continuation_line = false;
+    at_line_start = true;
 
     if (paren_depth > 0) {
-        line_has_token = false;
-        return -1; /* continue scanning; LF inside parentheses is whitespace */
+        continuation_line = true;
+        /* Keep line_has_token: the same logical line continues inside parentheses. */
+        return -1;
     }
 
+    continuation_line = false;
+
     if (!line_has_token) {
-        line_has_token = false;
         return -1; /* comment-only physical/logical line is ignored */
     }
 
@@ -245,24 +260,44 @@ static int finish_multiline_comment(Token *token) {
  *   1/99 error.
  */
 static int handle_line_start(Token *token) {
-    int  spaces             = 0;
-    bool indentation_locked = false;
+    /*
+     * AI-assisted modification.
+     * Prompt: "Dej mi opravený scanner.c, aby splňoval veškeré potřeby základního zadání"
+     * Leading tabs (and other non-space horizontal whitespace) are remembered instead
+     * of rejected immediately. A physical line containing only whitespace/comments is
+     * ignored, while a nonempty line may use only spaces for indentation.
+     */
+    int  spaces                    = 0;
+    bool indentation_locked        = false;
+    bool invalid_indent_whitespace = false;
 
     while (at_line_start) {
         int c;
 
         if (!indentation_locked) {
-            while ((c = fgetc(source)) == ' ') {
-                ++spaces;
-            }
-
-            if (c == '\t') {
-                return 1;
+            /* Only literal spaces contribute to the indentation width. */
+            while (true) {
+                c = fgetc(source);
+                if (c == ' ') {
+                    ++spaces;
+                    continue;
+                }
+                if (c == '\t' || c == '\f' || c == '\v') {
+                    invalid_indent_whitespace = true;
+                    continue;
+                }
+                break;
             }
         } else {
-
+            /*
+             * A same-line block comment before the first token behaves as whitespace,
+             * but spaces after that comment no longer belong to the line indentation.
+             */
             do {
                 c = fgetc(source);
+                if (c == '\t' || c == '\f' || c == '\v') {
+                    invalid_indent_whitespace = true;
+                }
             } while (c == ' ' || c == '\t' || c == '\f' || c == '\v');
         }
 
@@ -276,10 +311,10 @@ static int handle_line_start(Token *token) {
 
         if (c == '\n') {
             /* Empty/whitespace/comment-only physical lines are ignored. */
-            spaces             = 0;
-            indentation_locked = false;
-            line_has_token     = false;
-            continuation_line  = paren_depth > 0;
+            spaces                    = 0;
+            indentation_locked        = false;
+            invalid_indent_whitespace = false;
+            continuation_line         = paren_depth > 0;
             continue;
         }
 
@@ -300,12 +335,15 @@ static int handle_line_start(Token *token) {
         /* Comment-only lines must not change indentation. */
         if (c == '/') {
             int next = fgetc(source);
+
             if (next == '/') {
                 while ((c = fgetc(source)) != '\n' && c != EOF) {
                     ;
                 }
+
                 if (c == EOF) {
-                    at_line_start = false;
+                    at_line_start     = false;
+                    continuation_line = false;
                     if (indent_top > 0) {
                         pending_dedents = indent_top;
                         indent_top      = 0;
@@ -316,39 +354,49 @@ static int handle_line_start(Token *token) {
                     token->type = TOKEN_EOF;
                     return 0;
                 }
-                spaces             = 0;
-                indentation_locked = false;
-                line_has_token     = false;
+
+                spaces                    = 0;
+                indentation_locked        = false;
+                invalid_indent_whitespace = false;
+                continuation_line         = paren_depth > 0;
                 continue;
             }
 
             if (next == '*') {
                 bool had_newline = false;
                 int  rc          = consume_block_comment(&had_newline);
-                if (rc != 0)
+                if (rc != 0) {
                     return rc;
+                }
 
                 if (had_newline) {
                     rc = finish_multiline_comment(token);
-                    if (rc >= 0)
+                    if (rc >= 0) {
                         return rc;
-                    spaces             = 0;
-                    indentation_locked = false;
+                    }
+                    spaces                    = 0;
+                    indentation_locked        = false;
+                    invalid_indent_whitespace = false;
                     continue;
                 }
 
-                /*
-                 * A same-line block comment at BOL behaves like whitespace.
-                 * Preserve the indentation measured before the comment.
-                 */
+                /* Preserve indentation measured before a same-line block comment. */
                 indentation_locked = true;
                 continue;
             }
 
+            /* A slash that does not start a comment is a real token. */
+            if (invalid_indent_whitespace) {
+                return 1;
+            }
             if (push_char(next) != 0 || push_char(c) != 0) {
                 return 99;
             }
         } else {
+            /* We now know that this physical line contains a real token. */
+            if (invalid_indent_whitespace) {
+                return 1;
+            }
             if (push_char(c) != 0) {
                 return 99;
             }
