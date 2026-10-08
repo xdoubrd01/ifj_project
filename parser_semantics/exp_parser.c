@@ -1,4 +1,5 @@
 #include "mock_scanner.h"
+#include "semantic.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -57,17 +58,16 @@ prec_idx_t get_precedence_index(Token token) {
  * E = error (syntax error)
  * = equal precedence (used to match parentheses "()")
  */
-char prec_table[8][8] =
-    {
-        // +-  */  <=>  == !=  (    )  value  EOF
-        {'>', '<', '>', '>', '<', '>', '<', '>'}, // +-
-        {'>', '>', '>', '>', '<', '>', '<', '>'}, // */
-        {'<', '<', 'E', '>', '<', '>', '<', '>'}, // <=>
-        {'<', '<', '<', 'E', '<', '>', '<', '>'}, // == !=
-        {'<', '<', '<', '<', '<', '=', '<', 'E'}, // (
-        {'>', '>', '>', '>', 'E', '>', 'E', '>'}, // )
-        {'>', '>', '>', '>', 'E', '>', 'E', '>'}, // value
-        {'<', '<', '<', '<', '<', 'E', '<', 'E'}  // EOF
+char prec_table[8][8] = {
+    // +-  */  <=>  == !=  (    )  value  EOF
+    {'>', '<', '>', '>', '<', '>', '<', '>'}, // +-
+    {'>', '>', '>', '>', '<', '>', '<', '>'}, // */
+    {'<', '<', 'E', '>', '<', '>', '<', '>'}, // <=>
+    {'<', '<', '<', 'E', '<', '>', '<', '>'}, // == !=
+    {'<', '<', '<', '<', '<', '=', '<', 'E'}, // (
+    {'>', '>', '>', '>', 'E', '>', 'E', '>'}, // )
+    {'>', '>', '>', '>', 'E', '>', 'E', '>'}, // value
+    {'<', '<', '<', '<', '<', 'E', '<', 'E'}  // EOF
 };
 
 // STACK IMPLEMENTATION FOR PRECEDENCE PARSER
@@ -84,7 +84,7 @@ typedef enum {
   SYM_TERMINAL,     // Terminal symbol (operator or operand)
   SYM_NON_TERMINAL, // Non-terminal symbol (result of a reduction)
   SYM_STOP, // Special symbol to indicate the bottom or start of the stack
-    SYM_SHIFT_MARKER // Special symbol to indicate a shift marker for
+  SYM_SHIFT_MARKER // Special symbol to indicate a shift marker for
 } Symbol_type;
 
 // Enum representing the data type of an expression
@@ -93,6 +93,7 @@ typedef enum {
   EXPR_TYPE_DOUBLE,
   EXPR_TYPE_STRING,
   EXPR_TYPE_BOOLEAN,
+  EXPR_TYPE_UNIT,
   EXPR_TYPE_UNDEFINED, // Undefined or unrecognized expression type
 } ExprDataType;
 
@@ -204,7 +205,8 @@ int parse_expression() {
       } else if (current_token.type == TOKEN_STRING_LITERAL) {
         new_item.data_type = EXPR_TYPE_STRING;
       } else if (current_token.type == TOKEN_IDENTIFIER) {
-        new_item.data_type = EXPR_TYPE_UNDEFINED;
+        new_item.data_type =
+            sem_get_variable_type(current_token.attribute.s_val);
       } else {
         new_item.data_type =
             EXPR_TYPE_UNDEFINED; // Default to undefined for other tokens
@@ -342,43 +344,42 @@ int parse_expression() {
           return 2; // Syntax error
         }
         push(new_item);
+      } else if (pop_count == 3 && popped_items[0].type == SYM_TERMINAL &&
+                 popped_items[0].token_type == TOKEN_RPAREN &&
+                 popped_items[1].type == SYM_NON_TERMINAL &&
+                 popped_items[2].type == SYM_TERMINAL &&
+                 popped_items[2].token_type == TOKEN_LPAREN) {
+        // Parenthesized expression reduction to non-terminal
+        Stack_Item new_item = {
+            .type = SYM_NON_TERMINAL,
+            .token_type = TOKEN_EOF,
+            .data_type = popped_items[1].data_type}; // Preserve the data type
+                                                     // of the inner expression
+        push(new_item);
+      } else {
+        fprintf(stderr, "Syntax error: invalid reduction pattern\n");
+        return 2; // Syntax error
       }
-         else if (pop_count == 3 && popped_items[0].type == SYM_TERMINAL &&
-               popped_items[0].token_type == TOKEN_RPAREN &&
-               popped_items[1].type == SYM_NON_TERMINAL &&
-               popped_items[2].type == SYM_TERMINAL &&
-               popped_items[2].token_type == TOKEN_LPAREN) {
-      // Parenthesized expression reduction to non-terminal
-      Stack_Item new_item = {
-          .type = SYM_NON_TERMINAL,
-          .token_type = TOKEN_EOF,
-          .data_type =popped_items[1].data_type}; // Preserve the data type of the inner expression
+    } else if (precedence_relation == '=') {
+      Stack_Item new_item = {.type = SYM_TERMINAL,
+                             .token_type = current_token.type};
       push(new_item);
-    } else {
-      fprintf(stderr, "Syntax error: invalid reduction pattern\n");
+      get_next_token(&current_token);
+    } else if (precedence_relation == 'E') {
+      fprintf(stderr, "Syntax error: unrecognized precedence relation\n");
       return 2; // Syntax error
     }
-  } else if (precedence_relation == '=') {
-    Stack_Item new_item = {.type = SYM_TERMINAL,
-                           .token_type = current_token.type};
-    push(new_item);
-    get_next_token(&current_token);
-  }
-  else if (precedence_relation == 'E') {
-    fprintf(stderr, "Syntax error: unrecognized precedence relation\n");
-    return 2; // Syntax error
-  }
 
-  // Check for end of parsing condition
-  if (column_idx == PREC_IDX_EOF && top_terminal.token_type == TOKEN_EOF) {
-    if (stack_top == 1 && stack[1].type == SYM_NON_TERMINAL) {
-      // Only the stop symbol remains in the stack, parsing is complete
-      expr_parsed = true;
-    } else {
-      fprintf(stderr, "Syntax error: unexpected end of input\n");
-      return 2; // Syntax error
+    // Check for end of parsing condition
+    if (column_idx == PREC_IDX_EOF && top_terminal.token_type == TOKEN_EOF) {
+      if (stack_top == 1 && stack[1].type == SYM_NON_TERMINAL) {
+        // Only the stop symbol remains in the stack, parsing is complete
+        expr_parsed = true;
+      } else {
+        fprintf(stderr, "Syntax error: unexpected end of input\n");
+        return 2; // Syntax error
+      }
     }
   }
-}
-return 0; // Successful parsing
+  return 0; // Successful parsing
 }
