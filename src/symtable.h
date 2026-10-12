@@ -4,7 +4,7 @@
 #include "hashtable.h"
 #include <stdbool.h>
 
-typedef enum { type_int, type_double, type_string, type_unit } data_type;
+typedef enum { type_int, type_double, type_string, type_unit, type_bool } data_type;
 
 typedef enum { sym_var, sym_func } symbol_type;
 
