@@ -58,6 +58,7 @@ prec_idx_t get_precedence_index(Token token) {
  * E = error (syntax error)
  * = equal precedence (used to match parentheses "()")
  */
+ //
 char prec_table[8][8] = {
     // +-  */  <=>  == !=  (    )  value  EOF
     {'>', '<', '>', '>', '<', '>', '<', '>'}, // +-
