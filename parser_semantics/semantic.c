@@ -1,5 +1,4 @@
 #include "semantic.h"
-#include "/../src/symtable.h" // Include the symtable header for symbol table functions
 #include <stdio.h>
 #include <stdlib.h>
 
