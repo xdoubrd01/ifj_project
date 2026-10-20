@@ -13,15 +13,25 @@ typedef enum {
   PREC_IDX_RPAREN,   // 5, )
   PREC_IDX_VALUE,    // 6, Integer, double, string, identifier
   PREC_IDX_EOF,      // 7, End of file
+  PREC_IDX_UNARY,    // 9, + - UNARY
   PREC_IDX_NONE      // 8, undefined or unrecognized token
 } prec_idx_t;
 
 // Function to get the precedence index (prec_idx_t) for a given token
-prec_idx_t get_precedence_index(Token token) {
-  switch (token.type) {
+prec_idx_t get_precedence_index(Tokentype current_type, TokenType prev_type) {
+  switch (current_type) {
   case TOKEN_PLUS:
   case TOKEN_MINUS:
-    return PREC_IDX_ADD_SUB;
+      if(prev_type == TOKEN_EOF ||
+         prev_type == TOKEN_LPAREN || prev_type == TOKEN_PLUS || prev_type == TOKEN_MINUS ||
+         prev_type == TOKEN_MUL || prev_type == TOKEN_DIV || prev_type == TOKEN_LT ||
+         prev_type == TOKEN_LEQ || prev_type == TOKEN_GT || prev_type == TOKEN_GEQ ||
+         prev_type == TOKEN_EQ || prev_type == TOKEN_NEQ) {
+          return PREC_IDX_UNARY; // Unary + or - operator
+      }
+      else {
+          return PREC_IDX_ADD_SUB; // Binary + or - operator
+      }
   case TOKEN_MUL:
   case TOKEN_DIV:
     return PREC_IDX_MUL_DIV;
@@ -58,17 +68,18 @@ prec_idx_t get_precedence_index(Token token) {
  * E = error (syntax error)
  * = equal precedence (used to match parentheses "()")
  */
- //
-char prec_table[8][8] = {
-    // +-  */  <=>  == !=  (    )  value  EOF
-    {'>', '<', '>', '>', '<', '>', '<', '>'}, // +-
-    {'>', '>', '>', '>', '<', '>', '<', '>'}, // */
-    {'<', '<', 'E', '>', '<', '>', '<', '>'}, // <=>
-    {'<', '<', '<', 'E', '<', '>', '<', '>'}, // == !=
-    {'<', '<', '<', '<', '<', '=', '<', 'E'}, // (
-    {'>', '>', '>', '>', 'E', '>', 'E', '>'}, // )
-    {'>', '>', '>', '>', 'E', '>', 'E', '>'}, // value
-    {'<', '<', '<', '<', '<', 'E', '<', 'E'}  // EOF
+//
+char prec_table[9][9] = {
+    // +-  */  <=>  == !=   (   )  value  EOF UNARY
+      {'>', '<', '>', '>', '<', '>', '<', '>' '<'}, // +-
+      {'>', '>', '>', '>', '<', '>', '<', '>' '<'}, // */
+      {'<', '<', 'E', '>', '<', '>', '<', '>' '<'}, // REL <=>
+      {'<', '<', '<', 'E', '<', '>', '<', '>' '<'}, // EQ == !=
+      {'<', '<', '<', '<', '<', '=', '<', 'E' '<'}, // (
+      {'>', '>', '>', '>', 'E', '>', 'E', '>' 'E'}, // )
+      {'>', '>', '>', '>', 'E', '>', 'E', '>' 'E'}, // value
+      {'<', '<', '<', '<', '<', 'E', '<', 'E' '<'},  // EOF
+      {'>', '>', '>', '>', 'E', '>', 'E', '>' '<'}   // UNARY
 };
 
 // STACK IMPLEMENTATION FOR PRECEDENCE PARSER
@@ -76,8 +87,9 @@ char prec_table[8][8] = {
 // Structure representing an item in the precedence parser's stack
 typedef struct {
   Symbol_type type;
-  TokenType token_type;   // The token associated with the symbol
-  ExprDataType data_type; // The data type of the expression (if applicable)
+  TokenType token_type; // The token associated with the symbol
+  data_type data_type;  // The data type of the expression (if applicable)
+  prec_idx_t prec_idx; // The precedence index of the symbol
 } Stack_Item;
 
 // Enum representing the type of symbol in the precedence parser
@@ -87,16 +99,6 @@ typedef enum {
   SYM_STOP, // Special symbol to indicate the bottom or start of the stack
   SYM_SHIFT_MARKER // Special symbol to indicate a shift marker for
 } Symbol_type;
-
-// Enum representing the data type of an expression
-typedef enum {
-  EXPR_TYPE_INT,
-  EXPR_TYPE_DOUBLE,
-  EXPR_TYPE_STRING,
-  EXPR_TYPE_BOOLEAN,
-  EXPR_TYPE_UNIT,
-  EXPR_TYPE_UNDEFINED, // Undefined or unrecognized expression type
-} ExprDataType;
 
 #define STACK_MAX_SIZE 100        // Maximum size of the stack
 Stack_Item stack[STACK_MAX_SIZE]; // Stack for the precedence parser
@@ -165,12 +167,14 @@ void insert_shift_marker() {
   stack_top++; // Update the top index of the stack
 }
 
-int parse_expression() {
+int parse_expression(hashtable *ts) {
   // Initialize the stack with a stop symbol
   Stack_Item stop_item = {.type = SYM_STOP, .token_type = TOKEN_EOF};
   push(stop_item);
 
+  Tokentype prev_type = TOKEN_EOF;
   Token current_token;
+
   if (get_next_token(&current_token) != 0) {
     fprintf(stderr, "Lexical error while getting the first token\n");
     return 1; // Lexical error
@@ -181,9 +185,9 @@ int parse_expression() {
   while (!expr_parsed) {
     // Get the top terminal from the stack and determine precedence
     Stack_Item top_terminal = get_top_terminal();
-    prec_idx_t row_idx = get_precedence_index(top_terminal.token_type);
+    prec_idx_t row_idx = top_terminal.prec_idx;
     // Get the precedence index for the current token
-    prec_idx_t column_idx = get_precedence_index(current_token.type);
+    prec_idx_t column_idx = get_precedence_index(current_token.type, prev_type);
 
     if (column_idx == PREC_IDX_NONE) {
       column_idx = PREC_IDX_EOF; // Treat unrecognized tokens as EOF for
@@ -197,7 +201,8 @@ int parse_expression() {
       // Insert a shift marker before pushing the current token onto the stack
       insert_shift_marker();
       Stack_Item new_item = {.type = SYM_TERMINAL,
-                             .token_type = current_token.type};
+                             .token_type = current_token.type,
+                             .prec_idx = column_idx};
 
       if (current_token.type == TOKEN_INT_LITERAL) {
         new_item.data_type = EXPR_TYPE_INT;
@@ -215,11 +220,21 @@ int parse_expression() {
 
       push(new_item);
 
+      prev_token_type = current_token.type;
       if (get_next_token(&current_token) != 0) {
         fprintf(stderr, "Lexical error while getting the next token\n");
         return 1; // Lexical error
       }
-    } else if (precedence_relation == '>') {
+    } else if (precedence_relation == '=') {
+      Stack_Item new_item = {.type = SYM_TERMINAL,
+                             .token_type = current_token.type,
+                             .prec_idx = column_idx};
+      push(new_item);
+      prev_token_type = current_token.type;
+      get_next_token(&current_token);
+    }
+    
+    else if (precedence_relation == '>') {
       // Reduce operation
       Stack_Item
           popped_items[4]; // maximum of 4 items can be popped for a reduction
@@ -268,82 +283,10 @@ int parse_expression() {
             .token_type =
                 TOKEN_EOF}; // Non-terminal token type can be set as needed
 
-        if (op_item.token_type == TOKEN_PLUS ||
-            op_item.token_type == TOKEN_MINUS) {
-          if (left_operand.data_type == EXPR_TYPE_INT &&
-              right_operand.data_type == EXPR_TYPE_INT) {
-            new_item.data_type = EXPR_TYPE_INT;
-            // Perform integer addition or subtraction
-          } else if ((left_operand.data_type == EXPR_TYPE_INT &&
-                      right_operand.data_type == EXPR_TYPE_DOUBLE) ||
-                     (left_operand.data_type == EXPR_TYPE_DOUBLE &&
-                      right_operand.data_type == EXPR_TYPE_INT) ||
-                     (left_operand.data_type == EXPR_TYPE_DOUBLE &&
-                      right_operand.data_type == EXPR_TYPE_DOUBLE)) {
-            new_item.data_type = EXPR_TYPE_DOUBLE;
-          } else if (left_operand.data_type == EXPR_TYPE_STRING &&
-                     right_operand.data_type == EXPR_TYPE_STRING) {
-            new_item.data_type =
-                EXPR_TYPE_STRING; // Perform string concatenation for addition
-          } else {
-            fprintf(
-                stderr,
-                "Type error: incompatible types for addition/subtraction\n");
-            return 6; // Syntax error
-          }
-        }
+        new_item.data_type = sem_get_binary_op_result(
+            op_item.token_type, left_operand.data_type,
+            right_operand.data_type); // Determine the result data type
 
-        // multiplication and division
-        else if (op_item.token_type == TOKEN_MUL ||
-                 op_item.token_type == TOKEN_DIV) {
-          if (left_operand.data_type == EXPR_TYPE_INT &&
-              right_operand.data_type == EXPR_TYPE_INT) {
-            new_item.data_type = EXPR_TYPE_INT;
-          } else if ((left_operand.data_type == EXPR_TYPE_INT &&
-                      right_operand.data_type == EXPR_TYPE_DOUBLE) ||
-                     (left_operand.data_type == EXPR_TYPE_DOUBLE &&
-                      right_operand.data_type == EXPR_TYPE_INT) ||
-                     (left_operand.data_type == EXPR_TYPE_DOUBLE &&
-                      right_operand.data_type == EXPR_TYPE_DOUBLE)) {
-            new_item.data_type = EXPR_TYPE_DOUBLE;
-          } else {
-            fprintf(
-                stderr,
-                "Type error: incompatible types for multiplication/division\n");
-            return 6; // Syntax error
-          }
-        }
-        // relational operators (<, <=, >, >=, ==, !=)
-        else if (op_item.token_type == TOKEN_LT ||
-                 op_item.token_type == TOKEN_LEQ ||
-                 op_item.token_type == TOKEN_GT ||
-                 op_item.token_type == TOKEN_GEQ ||
-                 op_item.token_type == TOKEN_EQ ||
-                 op_item.token_type == TOKEN_NEQ) {
-
-          // check if both operands are numeric or both are strings
-          bool are_numeric = (left_operand.data_type == EXPR_TYPE_INT ||
-                              left_operand.data_type == EXPR_TYPE_DOUBLE) &&
-                             (right_operand.data_type == EXPR_TYPE_INT ||
-                              right_operand.data_type == EXPR_TYPE_DOUBLE);
-
-          bool are_strings = (left_operand.data_type == EXPR_TYPE_STRING &&
-                              right_operand.data_type == EXPR_TYPE_STRING);
-
-          if (are_numeric || are_strings) {
-            new_item.data_type =
-                EXPR_TYPE_BOOLEAN; // Result of relational operation is boolean
-          } else {
-            fprintf(stderr, "Type error: comparing incompatible types\n");
-            return 6; // Syntax error
-          }
-        }
-
-        else {
-          fprintf(stderr,
-                  "Syntax error: unrecognized operator between operands\n");
-          return 2; // Syntax error
-        }
         push(new_item);
       } else if (pop_count == 3 && popped_items[0].type == SYM_TERMINAL &&
                  popped_items[0].token_type == TOKEN_RPAREN &&
@@ -356,6 +299,7 @@ int parse_expression() {
             .token_type = TOKEN_EOF,
             .data_type = popped_items[1].data_type}; // Preserve the data type
                                                      // of the inner expression
+
         push(new_item);
       } else {
         fprintf(stderr, "Syntax error: invalid reduction pattern\n");
