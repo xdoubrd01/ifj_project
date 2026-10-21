@@ -2,8 +2,8 @@
 #define SEMANTIC_H
 
 #include "/../src/scanner.h"
-#include <stdbool.h>
 #include "/../src/symtable.h"
+#include <stdbool.h>
 
 typedef enum {
   EXPR_TYPE_INT,
