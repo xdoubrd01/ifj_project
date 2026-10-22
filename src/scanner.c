@@ -1,4 +1,12 @@
 #include "scanner.h"
+
+/*
+ * AI-assisted final review and correction of the team's scanner implementation.
+ * Original implementation was provided by the project team; AI was used for code review
+ * and corrections of bounded scanner parts.
+ * Prompt: "Dej mi tedy kompletně opravený scanner.c ve finální podobě a dej mi návod jak to otestovat a poté se vrátíme k diagramům"
+ * AI-modified sections are additionally marked below where practical.
+ */
 #include <ctype.h>
 #include <errno.h>
 #include <math.h>
@@ -470,34 +478,34 @@ static int read_identifier(Token *token, int first) {
 }
 
 static int append_digit_sequence(int first_digit, int *terminator) {
-    bool previous_was_digit = false;
-
     if (first_digit >= 0) {
         if (!isdigit((unsigned char)first_digit))
             return 1;
         if (ds_append(&buffer, (char)first_digit) != 0)
             return 99;
-        previous_was_digit = true;
     }
 
     while (true) {
         int c = fgetc(source);
+
         if (isdigit((unsigned char)c)) {
             if (ds_append(&buffer, (char)c) != 0)
                 return 99;
-            previous_was_digit = true;
             continue;
         }
 
         if (c == '_') {
-            if (!previous_was_digit)
+            do {
+                if (ds_append(&buffer, '_') != 0)
+                    return 99;
+                c = fgetc(source);
+            } while (c == '_');
+
+            if (!isdigit((unsigned char)c))
                 return 1;
-            int next = fgetc(source);
-            if (!isdigit((unsigned char)next))
-                return 1;
-            if (ds_append(&buffer, '_') != 0 || ds_append(&buffer, (char)next) != 0)
+
+            if (ds_append(&buffer, (char)c) != 0)
                 return 99;
-            previous_was_digit = true;
             continue;
         }
 
