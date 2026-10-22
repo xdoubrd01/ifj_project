@@ -1,9 +1,9 @@
 #include "exp_parser.h"
 #include "../src/scanner.h"
 #include "semantic.h"
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
 #include <string.h>
 
 // index of token for precedence table
@@ -56,6 +56,12 @@ prec_idx_t get_precedence_index(TokenType current_type, TokenType prev_type) {
   case TOKEN_IDENTIFIER:
     return PREC_IDX_VALUE;
   case TOKEN_EOF:
+  case TOKEN_EOF:
+  case TOKEN_EOL:
+  case TOKEN_SEMICOLON:
+  case TOKEN_KW_DO:
+  case TOKEN_KW_THEN:
+  case TOKEN_COMMA:
     return PREC_IDX_EOF;
   default:
     return PREC_IDX_NONE; // Undefined or unrecognized token
@@ -72,15 +78,15 @@ prec_idx_t get_precedence_index(TokenType current_type, TokenType prev_type) {
  */
 char prec_table[9][9] = {
     // +-   */   <=>  ==!=  (    )   val  EOF  UNARY
-    { '>', '<', '>', '>', '<', '>', '<', '>', '<' }, // +-
-    { '>', '>', '>', '>', '<', '>', '<', '>', '<' }, // */
-    { '<', '<', 'E', '>', '<', '>', '<', '>', '<' }, // REL <=>
-    { '<', '<', '<', 'E', '<', '>', '<', '>', '<' }, // EQ == !=
-    { '<', '<', '<', '<', '<', '=', '<', 'E', '<' }, // (
-    { '>', '>', '>', '>', 'E', '>', 'E', '>', 'E' }, // )
-    { '>', '>', '>', '>', 'E', '>', 'E', '>', 'E' }, // value
-    { '<', '<', '<', '<', '<', 'E', '<', 'E', '<' }, // EOF
-    { '>', '>', '>', '>', '<', '>', '<', '>', '<' }  // UNARY
+    {'>', '<', '>', '>', '<', '>', '<', '>', '<'}, // +-
+    {'>', '>', '>', '>', '<', '>', '<', '>', '<'}, // */
+    {'<', '<', 'E', '>', '<', '>', '<', '>', '<'}, // REL <=>
+    {'<', '<', '<', 'E', '<', '>', '<', '>', '<'}, // EQ == !=
+    {'<', '<', '<', '<', '<', '=', '<', 'E', '<'}, // (
+    {'>', '>', '>', '>', 'E', '>', 'E', '>', 'E'}, // )
+    {'>', '>', '>', '>', 'E', '>', 'E', '>', 'E'}, // value
+    {'<', '<', '<', '<', '<', 'E', '<', 'E', '<'}, // EOF
+    {'>', '>', '>', '>', '<', '>', '<', '>', '<'}  // UNARY
 };
 
 // STACK IMPLEMENTATION FOR PRECEDENCE PARSER
@@ -89,8 +95,8 @@ char prec_table[9][9] = {
 typedef enum {
   SYM_TERMINAL,     // Terminal symbol (operator or operand)
   SYM_NON_TERMINAL, // Non-terminal symbol (result of a reduction)
-  SYM_STOP,         // Special symbol to indicate the bottom or start of the stack
-  SYM_SHIFT_MARKER  // Special symbol to indicate a shift marker
+  SYM_STOP, // Special symbol to indicate the bottom or start of the stack
+  SYM_SHIFT_MARKER // Special symbol to indicate a shift marker
 } Symbol_type;
 
 // Structure representing an item in the precedence parser's stack
@@ -160,53 +166,69 @@ void insert_shift_marker() {
 
   Stack_Item marker = {.type = SYM_SHIFT_MARKER, .token_type = TOKEN_EOF};
   stack[top_index + 1] = marker;
-  stack_top++; 
+  stack_top++;
 }
 
-
-
-// this function prints a string in IFJcode26 format, escaping special characters
+// this function prints a string in IFJcode26 format, escaping special
+// characters
 void print_ifj_string(const char *str) {
-    if (!str) return;
-    while (*str) {
-        unsigned char c = (unsigned char)(*str);
-        if (c <= 32 || c == 35 || c == 92) { // 35 = #, 92 = \ 
+  if (!str)
+    return;
+  while (*str) {
+    unsigned char c = (unsigned char)(*str);
+    if (c <= 32 || c == 35 || c == 92) { // 35 = #, 92 = \ 
             printf("\\%03d", c);
-        } else {
-            putchar(c);
-        }
-        str++;
+    } else {
+      putchar(c);
     }
+    str++;
+  }
 }
-
 
 int parse_expression(hashtable *ts) {
   // Initialize the stack with a stop symbol
-  Stack_Item stop_item = {.type = SYM_STOP, .token_type = TOKEN_EOF, .prec_idx = PREC_IDX_EOF};
+  Stack_Item stop_item = {
+      .type = SYM_STOP, .token_type = TOKEN_EOF, .prec_idx = PREC_IDX_EOF};
   push(stop_item);
 
   TokenType prev_token_type = TOKEN_EOF; // OPRAVENO
   Token current_token;
 
-  if (get_next_token(&current_token) != 0) {
-    fprintf(stderr, "Lexical error while getting the first token\n");
-    return 1; // Lexical error
+if (first_token != NULL) {
+    current_token = *first_token; // use first token
+  } else {
+    if (get_next_token(&current_token) != 0) {
+      fprintf(stderr, "Lexical error while getting the first token\n");
+      return 1; 
+    }
   }
 
-  bool expr_parsed = false;
-
-  while (!expr_parsed) {
+  while (1) {
     // Get the top terminal from the stack and determine precedence
     Stack_Item top_terminal = get_top_terminal();
     prec_idx_t row_idx = top_terminal.prec_idx;
-    
+
     // Get the precedence index for the current token
-    prec_idx_t column_idx = get_precedence_index(current_token.type, prev_token_type);
+    prec_idx_t column_idx =
+        get_precedence_index(current_token.type, prev_token_type);
 
     if (column_idx == PREC_IDX_NONE) {
       column_idx = PREC_IDX_EOF; // Treat unrecognized tokens as EOF
     }
 
+    // STOP CONDITION
+    bool is_stop_token = (column_idx == PREC_IDX_EOF || current_token.type == TOKEN_RPAREN);
+
+    if (is_stop_token && top_terminal.prec_idx == PREC_IDX_EOF) {
+      if (stack_top == 1 && stack[1].type == SYM_NON_TERMINAL) {
+        break; // END OF WHILE CYCLE
+      } else {
+        fprintf(stderr, "Syntax error: invalid or empty expression\n");
+        return 2;
+      }
+    }
+
+    // if we still here, continue with table
     char precedence_relation = prec_table[row_idx][column_idx];
 
     // shift
@@ -225,10 +247,11 @@ int parse_expression(hashtable *ts) {
         new_item.data_type = type_double;
       } else if (current_token.type == TOKEN_STRING_LITERAL) {
         new_item.data_type = type_string;
-      }  else if (current_token.type == TOKEN_IDENTIFIER) {
-        new_item.data_type = sem_get_variable_type(ts, current_token.attribute.s_val);
+      } else if (current_token.type == TOKEN_IDENTIFIER) {
+        new_item.data_type =
+            sem_get_variable_type(ts, current_token.attribute.s_val);
       } else {
-        new_item.data_type = type_unit; 
+        new_item.data_type = type_unit;
       }
 
       push(new_item);
@@ -238,24 +261,22 @@ int parse_expression(hashtable *ts) {
         fprintf(stderr, "Lexical error while getting the next token\n");
         return 1; // Lexical error
       }
-      
+
       // match
     } else if (precedence_relation == '=') {
-      Stack_Item new_item = {
-          .type = SYM_TERMINAL,
-          .token_type = current_token.type,
-          .prec_idx = column_idx,
-          .token = current_token
-      };
-      
+      Stack_Item new_item = {.type = SYM_TERMINAL,
+                             .token_type = current_token.type,
+                             .prec_idx = column_idx,
+                             .token = current_token};
+
       push(new_item);
       prev_token_type = current_token.type;
-      
+
       if (get_next_token(&current_token) != 0) {
         fprintf(stderr, "Lexical error while getting the next token\n");
         return 1;
       }
-      
+
       // reduction
     } else if (precedence_relation == '>') {
       Stack_Item popped_items[4];
@@ -278,7 +299,8 @@ int parse_expression(hashtable *ts) {
       }
 
       if (!found_shift_marker) {
-        fprintf(stderr, "Syntax error: no shift marker found during reduction\n");
+        fprintf(stderr,
+                "Syntax error: no shift marker found during reduction\n");
         return 2;
       }
 
@@ -289,64 +311,61 @@ int parse_expression(hashtable *ts) {
         // Semantic action: push the value onto the stack in IFJcode26
         if (item.token_type == TOKEN_INT_LITERAL) {
           printf("PUSHS int@%d\n", item.token.attribute.i_val);
-        } 
-        else if (item.token_type == TOKEN_DOUBLE_LITERAL) {
-          printf("PUSHS float@%a\n", item.token.attribute.d_val); // %a for double
-        } 
-        else if (item.token_type == TOKEN_STRING_LITERAL) {
+        } else if (item.token_type == TOKEN_DOUBLE_LITERAL) {
+          printf("PUSHS float@%a\n",
+                 item.token.attribute.d_val); // %a for double
+        } else if (item.token_type == TOKEN_STRING_LITERAL) {
           printf("PUSHS string@");
           print_ifj_string(item.token.attribute.s_val);
           printf("\n");
-        } 
-        else if (item.token_type == TOKEN_IDENTIFIER) {
+        } else if (item.token_type == TOKEN_IDENTIFIER) {
           printf("PUSHS LF@%s\n", item.token.attribute.s_val);
         }
 
-        Stack_Item new_item = {
-            .type = SYM_NON_TERMINAL,
-            .token_type = TOKEN_EOF,
-            .data_type = item.data_type
-        };
+        Stack_Item new_item = {.type = SYM_NON_TERMINAL,
+                               .token_type = TOKEN_EOF,
+                               .data_type = item.data_type};
         push(new_item);
 
         // 2: E -> E op E
       } else if (pop_count == 3 && popped_items[0].type == SYM_NON_TERMINAL &&
                  popped_items[1].type == SYM_TERMINAL &&
                  popped_items[2].type == SYM_NON_TERMINAL) {
-                 
+
         Stack_Item left_operand = popped_items[2];
         Stack_Item op_item = popped_items[1];
         Stack_Item right_operand = popped_items[0];
         TokenType op = op_item.token_type;
 
-        Stack_Item new_item = {
-            .type = SYM_NON_TERMINAL,
-            .token_type = TOKEN_EOF
-        };
-        
-        new_item.data_type = sem_get_binary_op_result(op, left_operand.data_type, right_operand.data_type);
+        Stack_Item new_item = {.type = SYM_NON_TERMINAL,
+                               .token_type = TOKEN_EOF};
+
+        new_item.data_type = sem_get_binary_op_result(
+            op, left_operand.data_type, right_operand.data_type);
 
         // generate IFJcode26 operations
         if (op == TOKEN_PLUS) {
           if (new_item.data_type == type_string) {
-              // right operand
-              printf("POPS GF@%%tmp2\n"); 
-              // left operand
-              printf("POPS GF@%%tmp1\n");
-              // konkatenace
-              printf("CONCAT GF@%%tmp3 GF@%%tmp1 GF@%%tmp2\n");
-              // return result back to stack
-              printf("PUSHS GF@%%tmp3\n");
+            // right operand
+            printf("POPS GF@%%tmp2\n");
+            // left operand
+            printf("POPS GF@%%tmp1\n");
+            // konkatenace
+            printf("CONCAT GF@%%tmp3 GF@%%tmp1 GF@%%tmp2\n");
+            // return result back to stack
+            printf("PUSHS GF@%%tmp3\n");
           } else {
-              printf("ADDS\n");
+            printf("ADDS\n");
           }
         } else if (op == TOKEN_MINUS) {
           printf("SUBS\n");
         } else if (op == TOKEN_MUL) {
           printf("MULS\n");
         } else if (op == TOKEN_DIV) {
-          if (new_item.data_type == type_int) printf("IDIVS\n");
-          else printf("DIVS\n");
+          if (new_item.data_type == type_int)
+            printf("IDIVS\n");
+          else
+            printf("DIVS\n");
         } else if (op == TOKEN_EQ) {
           printf("EQS\n");
         } else if (op == TOKEN_NEQ) {
@@ -383,27 +402,26 @@ int parse_expression(hashtable *ts) {
                  popped_items[1].type == SYM_TERMINAL &&
                  (popped_items[1].token_type == TOKEN_PLUS ||
                   popped_items[1].token_type == TOKEN_MINUS)) {
-                  
+
         Stack_Item operand = popped_items[0];
 
         if (popped_items[1].token_type == TOKEN_MINUS) {
           if (operand.data_type == type_int) {
             printf("PUSHS int@-1\n");
           } else {
-            printf("PUSHS float@-0x1.0p+0\n"); 
+            printf("PUSHS float@-0x1.0p+0\n");
           }
           printf("MULS\n");
         }
 
         if (operand.data_type == type_int || operand.data_type == type_double) {
-          Stack_Item new_item = {
-              .type = SYM_NON_TERMINAL,
-              .token_type = TOKEN_EOF,
-              .data_type = operand.data_type
-          };
+          Stack_Item new_item = {.type = SYM_NON_TERMINAL,
+                                 .token_type = TOKEN_EOF,
+                                 .data_type = operand.data_type};
           push(new_item);
         } else {
-          fprintf(stderr, "Semantic error (6): unary operator applied to non-numeric type\n");
+          fprintf(stderr, "Semantic error (6): unary operator applied to "
+                          "non-numeric type\n");
           return 6;
         }
 
@@ -426,10 +444,10 @@ int parse_expression(hashtable *ts) {
         return 2;
       }
     }
-  } // END OF WHILE CYCLE
+  } // END OF WHILE CYCLE (1)
 
-  // Save remaining token, wich ended parsing 
-  if(next_token != NULL) {
+  // Save remaining token, wich ended parsing
+  if (next_token != NULL) {
     *next_token = current_token;
   }
 

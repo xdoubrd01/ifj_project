@@ -6,6 +6,6 @@
 
 // Function to parse an expression using the precedence parser
 // Returns 0 on success, or an error code on failure
-int parse_expression(hashtable *ts, Token *next_token);
+int parse_expression(hashtable *ts, Token *next_token, Token *next_token);
 
 #endif // EXP_PARSER_H
