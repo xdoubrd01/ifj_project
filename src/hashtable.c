@@ -1,4 +1,6 @@
 #include "hashtable.h"
+
+#include <stdio.h>
 #include <string.h>
 
 unsigned long hash_djb2(const char *str) {
@@ -12,7 +14,25 @@ unsigned long hash_djb2(const char *str) {
 
 // TODO: Implement memory allocation for the `items` array and set initial cell states to `empty`.
 void ht_init(hashtable *table, size_t initial_capacity) {
-    // Implementation here
+    if (initial_capacity == 0) {
+        table->items = NULL;
+        table->capacity = 0;
+        table->size = 0;
+        table->used = 0;
+        return;
+    }
+    table->capacity = initial_capacity;
+    table->size = 0;
+    table->used = 0;
+    table->items = malloc(initial_capacity * sizeof *table->items);
+    if (table->items == NULL) {
+        return;
+    }
+    for (size_t i = 0; i < initial_capacity; i++) {
+        table->items[i].data = NULL;
+        table->items[i].key = NULL;
+        table->items[i].state = empty;
+    }
 }
 
 // TODO: Implement table resizing (rehashing) when the allowed load factor is exceeded
