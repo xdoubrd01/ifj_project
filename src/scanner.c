@@ -4,8 +4,9 @@
  * AI-assisted final review and correction of the team's scanner implementation.
  * Original implementation was provided by the project team; AI was used for code review
  * and corrections of bounded scanner parts.
- * Prompt: "Dej mi tedy kompletně opravený scanner.c ve finální podobě a dej mi návod jak to otestovat a poté se vrátíme k diagramům"
- * AI-modified sections are additionally marked below where practical.
+ * Prompt: "Dej mi tedy kompletně opravený scanner.c ve finální podobě a dej mi návod jak to
+ * otestovat a poté se vrátíme k diagramům" AI-modified sections are additionally marked below where
+ * practical.
  */
 #include <ctype.h>
 #include <errno.h>
@@ -169,8 +170,7 @@ static int convert_double(const char *text, double *out) {
      * Accept representable binary64 subnormal values even if strtod() reports ERANGE,
      * but reject overflow and values that underflow completely to zero.
      */
-    if (!isfinite(value) || end == NULL || *end != '\0' ||
-        (errno == ERANGE && value == 0.0)) {
+    if (!isfinite(value) || end == NULL || *end != '\0' || (errno == ERANGE && value == 0.0)) {
         ds_free(&tmp);
         return 1;
     }
