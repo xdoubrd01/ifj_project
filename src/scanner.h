@@ -53,7 +53,6 @@ typedef enum {
     TOKEN_RPAREN, // )
     TOKEN_COLON,  // :
     TOKEN_COMMA,  // ,
-    TOKEN_DOT,    // . 
     TOKEN_AT,     // @
     TOKEN_SEMICOL,// ;
 
