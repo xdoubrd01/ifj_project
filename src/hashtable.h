@@ -4,36 +4,30 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-// Cell states for open addressing collision resolution
-typedef enum {
-    empty,
-    full,
-    dead
-} cell_state;
+/* Open addressing, djb2, linear probing. Representation is private. */
+typedef struct hashtable hashtable;
+typedef void (*ht_destructor)(void *value);
 
-// Structure of a single item in the hash table
-typedef struct {
-    char       *key;
-    void       *data;
-    cell_state  state;
-} hash_item;
+/* Zero capacity selects a default. Returns NULL on allocation failure. */
+hashtable *ht_create(size_t initial_capacity);
 
-// Hash table structure
-typedef struct {
-    hash_item *items;
-    size_t     size;
-    size_t     capacity;
-    size_t     used;
-} hashtable;
+/* Destroys keys and table; optionally calls destroy_value on each value. */
+void ht_destroy(hashtable *table, ht_destructor destroy_value);
 
-// Hash function
-unsigned long hash_djb2(const char *str);
+size_t ht_size(const hashtable *table);
 
-// Table interface
-void  ht_init(hashtable *table, size_t initial_capacity);
-bool  ht_insert(hashtable *table, const char *key, void *data);
-void *ht_search(hashtable *table, const char *key);
-bool  ht_delete(hashtable *table, const char *key);
-void  ht_free(hashtable *table);
+/*
+ * Copies key. Values must be non-NULL.
+ * Replaces an existing value without freeing it.
+ * The caller must retain/free the previous value as appropriate.
+ * Returns false on invalid input or allocation failure.
+ */
+bool ht_insert(hashtable *table, const char *key, void *value);
 
-#endif // HASHTABLE_H
+/* Returned value is borrowed; NULL means absent or invalid input. */
+void *ht_search(const hashtable *table, const char *key);
+
+/* Frees the copied key, not the value. Save the value before deleting it. */
+bool ht_delete(hashtable *table, const char *key);
+
+#endif
