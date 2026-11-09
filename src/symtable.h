@@ -1,37 +1,42 @@
+/**
+ * @file symtable.h
+ * @brief Symbol records and the scoped symbol table interface.
+ *
+ * The table owns inserted records, copied names, and copied parameter arrays.
+ * Search functions return borrowed records; callers must not free them or
+ * replace their owned parameter arrays.
+ *
+ * Variable records expire when their scope is left.
+ * Function records expire when the symbol table is destroyed.
+ */
+
 #ifndef SYMTABLE_H
 #define SYMTABLE_H
 
 #include <stdbool.h>
 #include <stddef.h>
 
+/** @brief Type metadata, including internal and unresolved types. */
 typedef enum {
     type_int,
     type_double,
     type_string,
     type_unit,
-
-    /* Internal condition type, not a base-language value type. */
-    type_bool,
-
-    /* Builtin parameter wildcard only. */
-    type_any,
-
-    /* Unresolved inferred function result only. */
-    type_unknown
+    type_bool,   /**< Internal Boolean type; explicit source types require BOOLTHEN. */
+    type_any,    /**< Wildcard used for expected builtin parameter types. */
+    type_unknown /**< Unresolved type metadata. */
 } data_type;
 
+/** @brief Kind of symbol; parameters use sym_var. */
 typedef enum { sym_var, sym_func } symbol_type;
 
-typedef enum {
-    SYMTABLE_OK             = 0,
-    SYMTABLE_UNDEFINED      = 3,
-    SYMTABLE_REDEFINITION   = 4,
-    SYMTABLE_ARGUMENT_ERROR = 5,
-    SYMTABLE_TYPE_ERROR     = 6,
-    SYMTABLE_IMMUTABLE      = 7,
-    SYMTABLE_INTERNAL_ERROR = 99
-} symtable_status;
-
+/**
+ * @brief Symbol record owned by the symbol table.
+ *
+ * The type member selects the active union member.
+ * Function parameter arrays remain owned by the symbol table,
+ * including when accessed through a returned record.
+ */
 typedef struct {
     symbol_type type;
 
@@ -46,101 +51,177 @@ typedef struct {
             data_type  ret_type;
             size_t     param_count;
             data_type *params;
-            bool       return_type_explicit;
-            bool       is_builtin;
-            bool       is_main;
         } func;
     } data;
 } symbol_data;
 
+/** @brief Opaque symbol table type. */
 typedef struct SymTable SymTable;
 
-/*
- * No local scope is created automatically.
- * Builtins are inserted explicitly.
- * Zero capacity selects a default.
- * Returns NULL on allocation failure.
+/* Creation and destruction. */
+
+/**
+ * @brief Creates a symbol table with an empty global function table.
+ *
+ * @param initial_capacity Initial capacity per hash table; 0 selects the default.
+ * @return A new symbol table, or NULL on failure.
+ *
+ * @note No local scope or builtin functions are created automatically.
  */
 SymTable *symtable_create(size_t initial_capacity);
-void      symtable_destroy(SymTable *table);
 
-/*
- * Status of the last mutation/check.
- * Pure lookups do not change the status.
- * NULL returns SYMTABLE_INTERNAL_ERROR.
+/**
+ * @brief Destroys all scopes, functions, and owned symbol data.
+ *
+ * @param table Symbol table to destroy; NULL is accepted.
+ *
+ * @warning All borrowed symbol pointers become invalid.
  */
-symtable_status symtable_last_error(const SymTable *table);
+void symtable_destroy(SymTable *table);
 
-bool   symtable_enter_scope(SymTable *table);
-bool   symtable_leave_scope(SymTable *table);
+/* Scope management. */
+
+/**
+ * @brief Creates an empty local scope nested inside the current one.
+ *
+ * @param table Symbol table to update.
+ * @return true on success; false for NULL or allocation failure.
+ *
+ * @note On failure, the active scope and depth remain unchanged.
+ */
+bool symtable_enter_scope(SymTable *table);
+
+/**
+ * @brief Removes the current scope and restores its parent.
+ *
+ * @param table Symbol table to update.
+ * @return true on success; false for NULL or if no local scope exists.
+ *
+ * @warning Pointers to symbols owned by the removed scope become invalid.
+ */
+bool symtable_leave_scope(SymTable *table);
+
+/**
+ * @brief Returns the number of active local scopes.
+ *
+ * @param table Symbol table to inspect.
+ * @return Current depth, or 0 for NULL.
+ */
 size_t symtable_scope_depth(SymTable *table);
 
-/*
- * Insert a variable after checking its initializer.
- * This lets a shadowing initializer refer to the outer variable.
- * Variable and parameter types must be Int, Double, String, or Unit.
+/* Symbol lookup. */
+
+/**
+ * @brief Finds a variable or parameter in the current scope only.
+ *
+ * @param table Symbol table to search.
+ * @param key Null-terminated symbol name.
+ * @return A borrowed record, or NULL if absent, invalid, or no scope exists.
+ */
+symbol_data *symtable_search_current_var(SymTable *table, const char *key);
+
+/**
+ * @brief Finds the nearest visible variable or parameter.
+ *
+ * @param table Symbol table to search.
+ * @param key Null-terminated symbol name.
+ * @return A borrowed record, or NULL if absent or an argument is NULL.
+ *
+ * @note Searches from the current scope outward, respecting shadowing.
+ */
+symbol_data *symtable_search_var(SymTable *table, const char *key);
+
+/**
+ * @brief Finds a function in the global function table.
+ *
+ * @param table Symbol table to search.
+ * @param key Null-terminated function name.
+ * @return A borrowed record, or NULL if absent or an argument is NULL.
+ */
+symbol_data *symtable_search_func(SymTable *table, const char *key);
+
+/* Symbol registration. */
+
+/**
+ * @brief Registers a variable in the current local scope.
+ *
+ * @param table Target symbol table with an active scope.
+ * @param key Null-terminated variable name; copied on success.
+ * @param type Variable type metadata.
+ * @param is_mutable Whether assignment to the variable is permitted.
+ * @return true on success; false for invalid input, no active scope,
+ * a duplicate in the current scope, or allocation failure.
+ *
+ * @note Outer declarations may be shadowed.
+ * Contextual type checks belong to the parser or semantic analyzer.
  */
 bool symtable_insert_var(SymTable *table, const char *key, data_type type, bool is_mutable);
 
+/**
+ * @brief Registers an immutable parameter in the current local scope.
+ *
+ * @param table Target symbol table with an active scope.
+ * @param key Null-terminated parameter name; copied on success.
+ * @param type Parameter type metadata.
+ * @return true on success; false for invalid input, no active scope,
+ * a duplicate in the current scope, or allocation failure.
+ */
 bool symtable_insert_param(SymTable *table, const char *key, data_type type);
 
-/*
- * A concrete return type represents an explicit annotation.
- * type_unknown represents an omitted annotation and pending inference.
+/**
+ * @brief Registers a global function and copies its parameter types.
  *
- * Pre-register function headers to support forward calls.
- * The parser must reject direct/indirect recursion without explicit
- * return annotations.
+ * @param table Target symbol table.
+ * @param key Null-terminated function name; copied on success.
+ * @param ret_type Stored return type metadata.
+ * @param param_count Number of parameter types.
+ * @param params Array of param_count types; may be NULL when the count is zero.
+ * @return true on success; false for invalid input, a duplicate name,
+ * an unrepresentable array size, or allocation failure.
+ *
+ * @note The caller retains ownership of the input array.
+ * Function names must be unique; overloading is not supported.
  */
 bool symtable_insert_func(SymTable *table, const char *key, data_type ret_type, size_t param_count,
                           const data_type *params);
 
-/* Resolves unknown; cannot change an already resolved return type. */
-bool symtable_set_func_return_type(SymTable *table, const char *key, data_type ret_type);
-
-/*
- * Borrowed records: do not free them or modify ownership/type metadata.
- * Variable pointers expire when their scope is left.
- * Function pointers expire when the symbol table is destroyed.
- * Insertion/rehashing does not invalidate record pointers.
- */
-symbol_data *symtable_search_var(SymTable *table, const char *key);
-symbol_data *symtable_search_current_var(SymTable *table, const char *key);
-symbol_data *symtable_search_func(SymTable *table, const char *key);
-
-/*
- * Unknown is never compatible, including with itself or Any.
- * The only implicit conversion is Int -> Double.
- * Boolean remains an internal expression type.
- */
-bool symtable_type_compatible(data_type expected, data_type actual);
-
-/*
- * Inserts the ten base-language builtins.
- * All or none are inserted on failure.
- * A second insertion is a redefinition error.
+/**
+ * @brief Registers the ten builtin functions of the base IFJ26 language.
+ *
+ * @param table Target symbol table.
+ * @return true if all functions were inserted; false otherwise.
+ *
+ * @warning Insertion is not atomic. On failure, functions inserted earlier
+ * in this call remain present. The table can still be safely destroyed.
+ * @note Calling again after successful insertion fails due to duplicate names.
  */
 bool symtable_insert_builtins(SymTable *table);
 
-/* Semantic helpers set last_error to the corresponding IFJ26 code. */
-bool symtable_check_call(SymTable *table, const char *key, size_t arg_count,
-                         const data_type *arg_types);
+/* Type metadata and compatibility. */
 
-bool symtable_check_assignment(SymTable *table, const char *key, data_type actual);
-
-/*
- * Checks an explicit return statement, not the last body expression.
- * has_value == false means bare return; actual is then ignored.
- * An explicit Unit return type discards a checked base-language value.
+/**
+ * @brief Updates the stored return type of an existing function.
+ *
+ * @param table Symbol table containing the function.
+ * @param key Null-terminated function name.
+ * @param ret_type New return type metadata.
+ * @return true if updated; false if the function cannot be found.
+ *
+ * @note The parser or semantic analyzer decides whether an update is permitted.
  */
-bool symtable_check_return(SymTable *table, const char *key, data_type actual, bool has_value);
+bool symtable_set_func_return_type(SymTable *table, const char *key, data_type ret_type);
 
-/*
- * @main may have any identifier.
- * Mark while reading headers, validate after return-type inference.
- * mark temporarily permits an unresolved result type.
+/**
+ * @brief Checks compatibility of stored type metadata.
+ *
+ * @param expected Required type, possibly the Any wildcard.
+ * @param actual Actual type metadata.
+ * @return false if either type is unknown. Otherwise returns true for
+ * expected Any, equal types, or implicit Int-to-Double widening.
+ *
+ * @note This helper does not validate whether a type is legal
+ * in a particular source-language context.
  */
-bool symtable_mark_main(SymTable *table, const char *key);
-bool symtable_validate_main(SymTable *table);
+bool symtable_type_compatible(data_type expected, data_type actual);
 
-#endif
+#endif // SYMTABLE_H

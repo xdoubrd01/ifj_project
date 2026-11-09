@@ -1,64 +1,130 @@
+/**
+ * @file symtable.c
+ * @brief Scoped symbol table built on the public hash table API.
+ *
+ * Public contracts and ownership rules are documented in symtable.h.
+ */
+
 #include "symtable.h"
 #include "hashtable.h"
 
 #include <stdint.h>
 #include <stdlib.h>
-#include <string.h>
 
+/** @brief Default capacity for each underlying hash table. */
 #define DEFAULT_SYMTABLE_CAPACITY 32U
 
+/**
+ * @brief Local variable scope linked to its enclosing scope.
+ *
+ * Each scope owns one hash table containing its variables and parameters.
+ * The parent pointer links to the enclosing scope without owning it.
+ */
 typedef struct Scope {
     hashtable    *table;
     struct Scope *parent;
 } Scope;
 
+/**
+ * @brief Private symbol table state.
+ *
+ * Functions are stored globally, independently of local scopes.
+ * Local scopes form a stack through their parent pointers.
+ */
 struct SymTable {
-    hashtable      *functions;
-    Scope          *current_scope;
-    symbol_data    *main_function;
-    size_t          initial_capacity;
-    size_t          scope_depth;
-    symtable_status last_error;
+    hashtable *functions;
+    Scope     *current_scope;
+    size_t     initial_capacity;
+    size_t     scope_depth;
 };
 
-static bool result(SymTable *table, symtable_status status) {
-    if (table != NULL) {
-        table->last_error = status;
+/* Internal helpers. */
+
+/**
+ * @brief Replaces a zero capacity request with the module default.
+ */
+static size_t normalized_capacity(size_t capacity) {
+    /* A zero request selects the default rather than an empty allocation. */
+    return capacity == 0 ? DEFAULT_SYMTABLE_CAPACITY : capacity;
+}
+
+/**
+ * @brief Releases one symbol record and its owned parameter array.
+ *
+ * @param data Symbol record; NULL is accepted.
+ */
+static void free_symbol(void *data) {
+    /* Recover the concrete record type from the generic callback argument. */
+    symbol_data *symbol = data;
+
+    if (symbol == NULL) {
+        return;
     }
 
-    return status == SYMTABLE_OK;
-}
-
-static bool value_type(data_type type) {
-    return type == type_int || type == type_double || type == type_string || type == type_unit;
-}
-
-static void destroy_symbol(void *value) {
-    symbol_data *symbol = value;
-
-    if (symbol != NULL) {
-        if (symbol->type == sym_func) {
-            free(symbol->data.func.params);
-        }
-
-        free(symbol);
+    /* Function records own an additional array of parameter types. */
+    if (symbol->type == sym_func) {
+        free(symbol->data.func.params);
     }
+
+    /*
+     * Variable records have no additional dynamically allocated payload.
+     * Function parameter storage has already been released above.
+     */
+    free(symbol);
 }
+
+/**
+ * @brief Releases symbol values without destroying their hash table.
+ *
+ * @param table Table whose values are to be released; NULL is accepted.
+ *
+ * @warning Use only during disposal and follow with ht_free().
+ */
+static void free_symbol_table_data(hashtable *table) {
+    if (table == NULL) {
+        return;
+    }
+
+    /*
+     * Access values through the public hash table API.
+     * The callback releases records, while keys remain owned by the hash table.
+     *
+     * Afterwards, the cells still contain pointers to released records.
+     * The caller must destroy the hash table before using those values again.
+     */
+    ht_foreach(table, free_symbol);
+}
+
+/* Creation and destruction. */
 
 SymTable *symtable_create(size_t initial_capacity) {
-    SymTable *table = calloc(1, sizeof(*table));
+    /* Allocate the outer object before creating any owned hash tables. */
+    SymTable *table = malloc(sizeof(*table));
     if (table == NULL) {
         return NULL;
     }
 
-    table->initial_capacity = initial_capacity == 0 ? DEFAULT_SYMTABLE_CAPACITY : initial_capacity;
+    /*
+     * No local scope exists initially.
+     * Store the normalized capacity for both functions and future local scopes.
+     */
+    table->current_scope    = NULL;
+    table->scope_depth      = 0;
+    table->initial_capacity = normalized_capacity(initial_capacity);
 
+    /* Function symbols are stored separately from local variables. */
     table->functions = ht_create(table->initial_capacity);
+
     if (table->functions == NULL) {
+        /* Release the outer object if its hash table could not be created. */
         free(table);
         return NULL;
     }
 
+    /*
+     * The object is ready for use.
+     * Opening a local scope and registering builtins are explicit operations.
+     */
     return table;
 }
 
@@ -67,63 +133,113 @@ void symtable_destroy(SymTable *table) {
         return;
     }
 
+    /*
+     * Pop all local scopes before destroying the global function table.
+     * Each iteration releases one scope and restores its parent.
+     */
     while (table->current_scope != NULL) {
         symtable_leave_scope(table);
     }
 
-    ht_destroy(table->functions, destroy_symbol);
+    /*
+     * Free function records and their parameter arrays first.
+     * Then free the hash table, which owns the copied keys and cell array.
+     */
+    free_symbol_table_data(table->functions);
+    ht_free(table->functions);
+
+    /* No owned scopes or function records remain at this point. */
     free(table);
 }
 
-symtable_status symtable_last_error(const SymTable *table) {
-    return table == NULL ? SYMTABLE_INTERNAL_ERROR : table->last_error;
-}
+/* Scope management. */
 
 bool symtable_enter_scope(SymTable *table) {
-    if (table == NULL || table->scope_depth == SIZE_MAX) {
-        return result(table, SYMTABLE_INTERNAL_ERROR);
+    if (table == NULL) {
+        return false;
     }
 
+    /* Keep the new scope detached until all its allocations succeed. */
     Scope *scope = malloc(sizeof(*scope));
     if (scope == NULL) {
-        return result(table, SYMTABLE_INTERNAL_ERROR);
+        return false;
     }
 
+    /* Each scope receives its own empty hash table. */
     scope->table = ht_create(table->initial_capacity);
     if (scope->table == NULL) {
+        /*
+         * Only the new scope object needs cleanup.
+         * The active scope chain has not been modified.
+         */
         free(scope);
-        return result(table, SYMTABLE_INTERNAL_ERROR);
+        return false;
     }
 
+    /*
+     * Link the fully initialized scope to its enclosing scope.
+     * Make it current only after all required allocations have succeeded.
+     */
     scope->parent        = table->current_scope;
     table->current_scope = scope;
-    ++table->scope_depth;
+    table->scope_depth++;
 
-    return result(table, SYMTABLE_OK);
+    return true;
 }
 
 bool symtable_leave_scope(SymTable *table) {
     if (table == NULL || table->current_scope == NULL) {
-        return result(table, SYMTABLE_INTERNAL_ERROR);
+        return false;
     }
 
+    /*
+     * Save the scope being removed and restore its parent first.
+     * The parent belongs to the remaining scope chain.
+     */
     Scope *scope         = table->current_scope;
     table->current_scope = scope->parent;
 
-    ht_destroy(scope->table, destroy_symbol);
+    /*
+     * Release records before destroying the hash table.
+     * The hash table releases its copied keys, but not the symbol values.
+     */
+    free_symbol_table_data(scope->table);
+    ht_free(scope->table);
+
+    /* Release the scope object after all resources it owns are gone. */
     free(scope);
 
-    --table->scope_depth;
+    /* Keep the depth consistent with the remaining scope chain. */
+    if (table->scope_depth > 0) {
+        table->scope_depth--;
+    }
 
-    return result(table, SYMTABLE_OK);
+    return true;
 }
 
-size_t symtable_scope_depth(SymTable *table) { return table == NULL ? 0 : table->scope_depth; }
+size_t symtable_scope_depth(SymTable *table) {
+    /* NULL and a table without an active local scope both report depth zero. */
+    return table == NULL ? 0 : table->scope_depth;
+}
+
+/* Symbol lookup. */
 
 symbol_data *symtable_search_current_var(SymTable *table, const char *key) {
-    return table == NULL || table->current_scope == NULL
-               ? NULL
-               : ht_search(table->current_scope->table, key);
+    if (table == NULL || table->current_scope == NULL || key == NULL) {
+        return NULL;
+    }
+
+    /*
+     * Restrict lookup to the current scope.
+     * An outer declaration does not count as a duplicate in this scope.
+     */
+    symbol_data *symbol = ht_search(table->current_scope->table, key);
+    if (symbol == NULL || symbol->type != sym_var) {
+        return NULL;
+    }
+
+    /* Return a borrowed record without allocating or copying it. */
+    return symbol;
 }
 
 symbol_data *symtable_search_var(SymTable *table, const char *key) {
@@ -131,330 +247,262 @@ symbol_data *symtable_search_var(SymTable *table, const char *key) {
         return NULL;
     }
 
+    /* Search from the innermost scope outward to implement shadowing. */
     for (Scope *scope = table->current_scope; scope != NULL; scope = scope->parent) {
         symbol_data *symbol = ht_search(scope->table, key);
 
-        if (symbol != NULL) {
+        /* The first matching variable hides declarations in outer scopes. */
+        if (symbol != NULL && symbol->type == sym_var) {
             return symbol;
         }
     }
 
+    /* No active scope contains a matching variable or parameter. */
     return NULL;
 }
 
 symbol_data *symtable_search_func(SymTable *table, const char *key) {
-    return table == NULL ? NULL : ht_search(table->functions, key);
+    if (table == NULL || key == NULL) {
+        return NULL;
+    }
+
+    /*
+     * Functions are resolved through the global function table.
+     * Local variable scopes are not searched here.
+     */
+    symbol_data *symbol = ht_search(table->functions, key);
+    if (symbol == NULL || symbol->type != sym_func) {
+        return NULL;
+    }
+
+    /* The symbol table retains ownership of the returned record. */
+    return symbol;
 }
 
-static bool insert_variable(SymTable *table, const char *key, data_type type, bool is_mutable,
-                            bool is_parameter) {
+/* Symbol registration. */
+
+bool symtable_insert_var(SymTable *table, const char *key, data_type type, bool is_mutable) {
     if (table == NULL || table->current_scope == NULL || key == NULL) {
-        return result(table, SYMTABLE_INTERNAL_ERROR);
+        return false;
     }
 
+    /* Reject duplicates here while allowing names from outer scopes to be hidden. */
     if (symtable_search_current_var(table, key) != NULL) {
-        return result(table, SYMTABLE_REDEFINITION);
+        return false;
     }
 
-    if (!value_type(type)) {
-        return result(table, SYMTABLE_TYPE_ERROR);
-    }
-
-    symbol_data *symbol = calloc(1, sizeof(*symbol));
+    /*
+     * Allocate a separate record.
+     * Hash table resizing can then move entries without moving this record.
+     */
+    symbol_data *symbol = malloc(sizeof(*symbol));
     if (symbol == NULL) {
-        return result(table, SYMTABLE_INTERNAL_ERROR);
+        return false;
     }
 
+    /*
+     * Store the supplied type and mutability metadata.
+     * Contextual source-language checks are performed by the parser.
+     */
     symbol->type                  = sym_var;
     symbol->data.var.var_type     = type;
     symbol->data.var.is_mutable   = is_mutable;
-    symbol->data.var.is_parameter = is_parameter;
+    symbol->data.var.is_parameter = false;
 
+    /* Release the new record if insertion cannot take ownership of it. */
     if (!ht_insert(table->current_scope->table, key, symbol)) {
         free(symbol);
-        return result(table, SYMTABLE_INTERNAL_ERROR);
+        return false;
     }
 
-    return result(table, SYMTABLE_OK);
-}
-
-bool symtable_insert_var(SymTable *table, const char *key, data_type type, bool is_mutable) {
-    return insert_variable(table, key, type, is_mutable, false);
+    /* The symbol table owns the record; the hash table owns the copied key. */
+    return true;
 }
 
 bool symtable_insert_param(SymTable *table, const char *key, data_type type) {
-    return insert_variable(table, key, type, false, true);
-}
-
-static symbol_data *make_function(data_type ret_type, size_t count, const data_type *params,
-                                  bool builtin) {
-    if (count > SIZE_MAX / sizeof(data_type)) {
-        return NULL;
+    if (table == NULL || table->current_scope == NULL || key == NULL) {
+        return false;
     }
 
-    symbol_data *symbol = calloc(1, sizeof(*symbol));
+    /* Parameters and ordinary variables share the current scope namespace. */
+    if (symtable_search_current_var(table, key) != NULL) {
+        return false;
+    }
+
+    symbol_data *symbol = malloc(sizeof(*symbol));
     if (symbol == NULL) {
-        return NULL;
+        return false;
     }
 
-    symbol->type                           = sym_func;
-    symbol->data.func.ret_type             = ret_type;
-    symbol->data.func.param_count          = count;
-    symbol->data.func.return_type_explicit = ret_type != type_unknown;
-    symbol->data.func.is_builtin           = builtin;
+    /*
+     * A parameter is represented as a variable with additional metadata.
+     * Parameters are immutable regardless of how ordinary variables are handled.
+     */
+    symbol->type                  = sym_var;
+    symbol->data.var.var_type     = type;
+    symbol->data.var.is_mutable   = false;
+    symbol->data.var.is_parameter = true;
 
-    if (count != 0) {
-        symbol->data.func.params = malloc(count * sizeof(data_type));
-
-        if (symbol->data.func.params == NULL) {
-            free(symbol);
-            return NULL;
-        }
-
-        memcpy(symbol->data.func.params, params, count * sizeof(data_type));
+    /* Failed insertion leaves cleanup of the new record to this function. */
+    if (!ht_insert(table->current_scope->table, key, symbol)) {
+        free(symbol);
+        return false;
     }
 
-    return symbol;
+    return true;
 }
 
 bool symtable_insert_func(SymTable *table, const char *key, data_type ret_type, size_t param_count,
                           const data_type *params) {
-    if (table == NULL || key == NULL || (param_count != 0 && params == NULL) ||
-        param_count > SIZE_MAX / sizeof(data_type)) {
-        return result(table, SYMTABLE_INTERNAL_ERROR);
-    }
-
-    if (symtable_search_func(table, key) != NULL) {
-        return result(table, SYMTABLE_REDEFINITION);
-    }
-
-    if (ret_type != type_unknown && !value_type(ret_type)) {
-        return result(table, SYMTABLE_TYPE_ERROR);
-    }
-
-    for (size_t i = 0; i < param_count; ++i) {
-        if (!value_type(params[i])) {
-            return result(table, SYMTABLE_TYPE_ERROR);
-        }
-    }
-
-    symbol_data *symbol = make_function(ret_type, param_count, params, false);
-
-    if (symbol == NULL) {
-        return result(table, SYMTABLE_INTERNAL_ERROR);
-    }
-
-    if (!ht_insert(table->functions, key, symbol)) {
-        destroy_symbol(symbol);
-        return result(table, SYMTABLE_INTERNAL_ERROR);
-    }
-
-    return result(table, SYMTABLE_OK);
-}
-
-bool symtable_set_func_return_type(SymTable *table, const char *key, data_type ret_type) {
-    if (table == NULL || key == NULL) {
-        return result(table, SYMTABLE_INTERNAL_ERROR);
-    }
-
-    symbol_data *symbol = symtable_search_func(table, key);
-    if (symbol == NULL) {
-        return result(table, SYMTABLE_UNDEFINED);
-    }
-
-    if (!value_type(ret_type) ||
-        (symbol->data.func.ret_type != type_unknown && symbol->data.func.ret_type != ret_type)) {
-        return result(table, SYMTABLE_TYPE_ERROR);
-    }
-
-    symbol->data.func.ret_type = ret_type;
-
-    return result(table, SYMTABLE_OK);
-}
-
-bool symtable_type_compatible(data_type expected, data_type actual) {
-    if (expected == type_any) {
-        return value_type(actual);
-    }
-
-    if ((!value_type(expected) && expected != type_bool) ||
-        (!value_type(actual) && actual != type_bool)) {
+    if (table == NULL || key == NULL || (param_count > 0 && params == NULL)) {
         return false;
     }
 
-    return expected == actual || (expected == type_double && actual == type_int);
+    /* Function names must be unique because overloading is not supported. */
+    if (symtable_search_func(table, key) != NULL) {
+        return false;
+    }
+
+    symbol_data *symbol = malloc(sizeof(*symbol));
+    if (symbol == NULL) {
+        return false;
+    }
+
+    /*
+     * Start with no parameter array.
+     * A zero-parameter function therefore requires no additional allocation.
+     */
+    symbol->type                  = sym_func;
+    symbol->data.func.ret_type    = ret_type;
+    symbol->data.func.param_count = param_count;
+    symbol->data.func.params      = NULL;
+
+    if (param_count > 0) {
+        /* Guard the byte-count multiplication before allocating the array. */
+        if (param_count > SIZE_MAX / sizeof(*symbol->data.func.params)) {
+            free(symbol);
+            return false;
+        }
+
+        symbol->data.func.params = malloc(param_count * sizeof(*symbol->data.func.params));
+        if (symbol->data.func.params == NULL) {
+            free(symbol);
+            return false;
+        }
+
+        /*
+         * Copy the signature instead of borrowing the input array.
+         * The caller may release or modify its original array afterwards.
+         */
+        for (size_t i = 0; i < param_count; i++) {
+            symbol->data.func.params[i] = params[i];
+        }
+    }
+
+    /* Neither allocation has been transferred to the table if insertion fails. */
+    if (!ht_insert(table->functions, key, symbol)) {
+        free(symbol->data.func.params);
+        free(symbol);
+        return false;
+    }
+
+    /* The table owns both the record and its optional parameter-type array. */
+    return true;
 }
 
 bool symtable_insert_builtins(SymTable *table) {
-    static const struct {
-        const char *name;
-        data_type   ret_type;
-        size_t      count;
-        data_type   params[3];
-    } builtins[] = {{"print", type_unit, 1, {type_any}},
-                    {"readLine", type_string, 0, {type_int}},
-                    {"readInt", type_int, 0, {type_int}},
-                    {"readDouble", type_double, 0, {type_int}},
-                    {"toStr", type_string, 1, {type_any}},
-                    {"toInt", type_int, 1, {type_double}},
-                    {"strLength", type_int, 1, {type_string}},
-                    {"subStr", type_string, 3, {type_string, type_int, type_int}},
-                    {"ord", type_int, 2, {type_string, type_int}},
-                    {"chr", type_string, 1, {type_int}}};
-
     if (table == NULL) {
         return false;
     }
 
-    size_t count = sizeof(builtins) / sizeof(builtins[0]);
+    /*
+     * Describe builtin parameter types using temporary arrays.
+     * symtable_insert_func copies them before this function returns.
+     */
+    const data_type any_param[]             = {type_any};
+    const data_type double_param[]          = {type_double};
+    const data_type string_param[]          = {type_string};
+    const data_type string_int_int_params[] = {type_string, type_int, type_int};
+    const data_type string_int_params[]     = {type_string, type_int};
+    const data_type int_param[]             = {type_int};
 
-    /* Detect collisions before changing the table. */
-    for (size_t i = 0; i < count; ++i) {
-        if (symtable_search_func(table, builtins[i].name) != NULL) {
-            return result(table, SYMTABLE_REDEFINITION);
-        }
-    }
-
-    size_t inserted = 0;
-
-    for (; inserted < count; ++inserted) {
-        symbol_data *symbol = make_function(builtins[inserted].ret_type, builtins[inserted].count,
-                                            builtins[inserted].params, true);
-
-        if (symbol == NULL) {
-            break;
-        }
-
-        if (!ht_insert(table->functions, builtins[inserted].name, symbol)) {
-            destroy_symbol(symbol);
-            break;
-        }
-    }
-
-    if (inserted == count) {
-        return result(table, SYMTABLE_OK);
-    }
-
-    /* Roll back successfully inserted builtins after allocation failure. */
-    for (size_t i = 0; i < inserted; ++i) {
-        symbol_data *symbol = ht_search(table->functions, builtins[i].name);
-
-        ht_delete(table->functions, builtins[i].name);
-        destroy_symbol(symbol);
-    }
-
-    return result(table, SYMTABLE_INTERNAL_ERROR);
-}
-
-bool symtable_check_call(SymTable *table, const char *key, size_t arg_count,
-                         const data_type *arg_types) {
-    if (table == NULL || key == NULL || (arg_count != 0 && arg_types == NULL)) {
-        return result(table, SYMTABLE_INTERNAL_ERROR);
-    }
-
-    symbol_data *symbol = symtable_search_func(table, key);
-    if (symbol == NULL) {
-        return result(table, SYMTABLE_UNDEFINED);
-    }
-
-    if (arg_count != symbol->data.func.param_count) {
-        return result(table, SYMTABLE_ARGUMENT_ERROR);
-    }
-
-    for (size_t i = 0; i < arg_count; ++i) {
-        if (arg_types[i] == type_unknown) {
-            return result(table, SYMTABLE_TYPE_ERROR);
-        }
-
-        if (!value_type(arg_types[i]) ||
-            !symtable_type_compatible(symbol->data.func.params[i], arg_types[i])) {
-            return result(table, SYMTABLE_ARGUMENT_ERROR);
-        }
-    }
-
-    return result(table, SYMTABLE_OK);
-}
-
-bool symtable_check_assignment(SymTable *table, const char *key, data_type actual) {
-    if (table == NULL || key == NULL) {
-        return result(table, SYMTABLE_INTERNAL_ERROR);
-    }
-
-    symbol_data *symbol = symtable_search_var(table, key);
-    if (symbol == NULL) {
-        return result(table, SYMTABLE_UNDEFINED);
-    }
-
-    if (!symbol->data.var.is_mutable) {
-        return result(table, SYMTABLE_IMMUTABLE);
-    }
-
-    return result(table, symtable_type_compatible(symbol->data.var.var_type, actual)
-                             ? SYMTABLE_OK
-                             : SYMTABLE_TYPE_ERROR);
-}
-
-bool symtable_check_return(SymTable *table, const char *key, data_type actual, bool has_value) {
-    if (table == NULL || key == NULL) {
-        return result(table, SYMTABLE_INTERNAL_ERROR);
-    }
-
-    symbol_data *symbol = symtable_search_func(table, key);
-    if (symbol == NULL) {
-        return result(table, SYMTABLE_UNDEFINED);
-    }
-
-    if (symbol->data.func.is_builtin || !symbol->data.func.return_type_explicit) {
-        return result(table, SYMTABLE_TYPE_ERROR);
-    }
-
-    data_type expected = symbol->data.func.ret_type;
-
-    bool valid = has_value ? value_type(actual) && (expected == type_unit ||
-                                                    symtable_type_compatible(expected, actual))
-                           : expected == type_unit;
-
-    return result(table, valid ? SYMTABLE_OK : SYMTABLE_TYPE_ERROR);
-}
-
-bool symtable_mark_main(SymTable *table, const char *key) {
-    if (table == NULL || key == NULL) {
-        return result(table, SYMTABLE_INTERNAL_ERROR);
-    }
-
-    symbol_data *symbol = symtable_search_func(table, key);
-    if (symbol == NULL) {
-        return result(table, SYMTABLE_UNDEFINED);
-    }
-
-    if (table->main_function != NULL || symbol->data.func.is_builtin) {
-        return result(table, SYMTABLE_REDEFINITION);
-    }
-
-    if (symbol->data.func.param_count != 0) {
-        return result(table, SYMTABLE_ARGUMENT_ERROR);
-    }
-
-    if (symbol->data.func.ret_type != type_unknown && symbol->data.func.ret_type != type_unit) {
-        return result(table, SYMTABLE_TYPE_ERROR);
-    }
-
-    symbol->data.func.is_main = true;
-    table->main_function      = symbol;
-
-    return result(table, SYMTABLE_OK);
-}
-
-bool symtable_validate_main(SymTable *table) {
-    if (table == NULL) {
+    /*
+     * Stop at the first failure.
+     * Functions inserted earlier in this call are not rolled back.
+     */
+    if (!symtable_insert_func(table, "print", type_unit, 1, any_param)) {
         return false;
     }
 
-    if (table->main_function == NULL) {
-        return result(table, SYMTABLE_UNDEFINED);
+    /* Input functions take no arguments. */
+    if (!symtable_insert_func(table, "readLine", type_string, 0, NULL)) {
+        return false;
+    }
+    if (!symtable_insert_func(table, "readInt", type_int, 0, NULL)) {
+        return false;
+    }
+    if (!symtable_insert_func(table, "readDouble", type_double, 0, NULL)) {
+        return false;
     }
 
-    return result(table, table->main_function->data.func.ret_type == type_unit
-                             ? SYMTABLE_OK
-                             : SYMTABLE_TYPE_ERROR);
+    /* Conversion functions use their declared argument types. */
+    if (!symtable_insert_func(table, "toStr", type_string, 1, any_param)) {
+        return false;
+    }
+    if (!symtable_insert_func(table, "toInt", type_int, 1, double_param)) {
+        return false;
+    }
+
+    /* Register string operations and character-code conversions. */
+    if (!symtable_insert_func(table, "strLength", type_int, 1, string_param)) {
+        return false;
+    }
+    if (!symtable_insert_func(table, "subStr", type_string, 3, string_int_int_params)) {
+        return false;
+    }
+    if (!symtable_insert_func(table, "ord", type_int, 2, string_int_params)) {
+        return false;
+    }
+    if (!symtable_insert_func(table, "chr", type_string, 1, int_param)) {
+        return false;
+    }
+
+    return true;
+}
+
+/* Type metadata and compatibility. */
+
+bool symtable_set_func_return_type(SymTable *table, const char *key, data_type ret_type) {
+    /* Update an existing declaration rather than creating another function. */
+    symbol_data *symbol = symtable_search_func(table, key);
+    if (symbol == NULL) {
+        return false;
+    }
+
+    /* The parser decides when updating the stored return type is permitted. */
+    symbol->data.func.ret_type = ret_type;
+    return true;
+}
+
+bool symtable_type_compatible(data_type expected, data_type actual) {
+    /* An unresolved type cannot establish compatibility, even with itself. */
+    if (expected == type_unknown || actual == type_unknown) {
+        return false;
+    }
+
+    /* After unresolved types are rejected, expected Any accepts the actual type. */
+    if (expected == type_any) {
+        return true;
+    }
+
+    /* Matching resolved types require no implicit conversion. */
+    if (expected == actual) {
+        return true;
+    }
+
+    /*
+     * Int-to-Double widening is the only implicit conversion.
+     * This function reports compatibility; code generation performs conversion.
+     */
+    return expected == type_double && actual == type_int;
 }
