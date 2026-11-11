@@ -2,6 +2,7 @@
 #include "expr_tree.h"
 #include <stdlib.h>
 
+// Creates a new expression node of the given kind and type, with all fields zeroed
 ExprNode *expr_new(ExprKind kind, data_type type) {
   ExprNode *node = calloc(1, sizeof(ExprNode)); // zeroed -> pointers are NULL
   if (node == NULL) {
@@ -12,6 +13,7 @@ ExprNode *expr_new(ExprKind kind, data_type type) {
   return node;
 }
 
+// Frees the whole tree recursively, including owned strings and identifiers
 void expr_free(ExprNode *node) {
   if (node == NULL) {
     return;
@@ -64,6 +66,7 @@ static const char *op_name(ExprOp op) {
   return names[op];
 }
 
+// Dumps the tree in Prefix
 void expr_dump(const ExprNode *node, FILE *out) {
   if (node == NULL) {
     fprintf(out, "(null)");
