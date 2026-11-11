@@ -216,7 +216,7 @@ if (first_token != NULL) {
       column_idx = PREC_IDX_EOF; // Treat unrecognized tokens as EOF
     }
 
-    // STOP CONDITION
+    // STOP CONDITION if EOF or RPAREN without LPAREN
     bool is_stop_token = (column_idx == PREC_IDX_EOF || current_token.type == TOKEN_RPAREN);
 
     if (is_stop_token && top_terminal.prec_idx == PREC_IDX_EOF) {
