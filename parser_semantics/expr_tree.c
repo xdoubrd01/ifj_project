@@ -21,7 +21,7 @@ void expr_free(ExprNode *node) {
     free(node->u.s_val); // owned string value
     break;
   case EXPR_VAR:
-    free(node->u.var_name); // owned identifier
+    free(node->u.var.name); // owned identifier
     break;
   case EXPR_BINARY:
     expr_free(node->u.bin.left); // recursively free both operands
@@ -83,7 +83,8 @@ void expr_dump(const ExprNode *node, FILE *out) {
     fprintf(out, "()");
     break;
   case EXPR_VAR:
-    fprintf(out, "(var %s %s)", node->u.var_name, type_name(node->type));
+    fprintf(out, "(var %s$%u %s)", node->u.var.name, node->u.var.id,
+            type_name(node->type));
     break;
   case EXPR_BINARY:
     fprintf(out, "(%s %s ", op_name(node->u.bin.op), type_name(node->type));

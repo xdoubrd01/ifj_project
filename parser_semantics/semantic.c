@@ -27,7 +27,7 @@ static int to_double(ExprNode **node) {
 // AI - UPDATED START
 int sem_declare_variable(SymTable *st, const char *var_name,
                          data_type declared_type, data_type value_type,
-                         bool is_mutable) {
+                         bool is_mutable, unsigned *out_id) {
   // redefinition only in the same block, shadowing outer one is allowed
   if (symtable_search_current_var(st, var_name) != NULL) {
     fprintf(stderr, "Semantic error(4): Variable '%s' is already defined\n",
@@ -56,11 +56,15 @@ int sem_declare_variable(SymTable *st, const char *var_name,
     fprintf(stderr, "Internal error (99): cannot insert '%s'\n", var_name);
     return 99; // duplicate was checked above -> allocation failure
   }
+  if (out_id != NULL) {
+    // id of the new record, generator uses it in DEFVAR
+    *out_id = symtable_search_current_var(st, var_name)->data.var.id;
+  }
   return 0;
 }
 
 int sem_get_variable_type(SymTable *st, const char *var_name,
-                          data_type *out_type) {
+                          data_type *out_type, unsigned *out_id) {
   // nearest visible variable or parameter (respects shadowing)
   symbol_data *found = symtable_search_var(st, var_name);
   if (found == NULL) {
@@ -76,13 +80,16 @@ int sem_get_variable_type(SymTable *st, const char *var_name,
   }
 
   *out_type = found->data.var.var_type;
+  if (out_id != NULL) {
+    *out_id = found->data.var.id; // which of the shadowed variables
+  }
   return 0;
 }
 // AI - UPDATED END
 
 // AI START
 int sem_check_assignment(SymTable *st, const char *var_name,
-                         data_type value_type) {
+                         data_type value_type, unsigned *out_id) {
   symbol_data *found = symtable_search_var(st, var_name);
   if (found == NULL) {
     fprintf(stderr, "Semantic error(3): Variable '%s' is not defined\n",
@@ -99,6 +106,9 @@ int sem_check_assignment(SymTable *st, const char *var_name,
     fprintf(stderr, "Semantic error(6): Incompatible assignment to '%s'\n",
             var_name);
     return 6;
+  }
+  if (out_id != NULL) {
+    *out_id = found->data.var.id; // target variable for MOVE
   }
   return 0;
 }

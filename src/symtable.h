@@ -45,6 +45,7 @@ typedef struct {
             data_type var_type;
             bool      is_mutable;
             bool      is_parameter;
+            unsigned  id; /**< Unique within the table; distinguishes shadowed names. */
         } var;
 
         struct {
@@ -154,6 +155,7 @@ symbol_data *symtable_search_func(SymTable *table, const char *key);
  *
  * @note Outer declarations may be shadowed.
  * Contextual type checks belong to the parser or semantic analyzer.
+ * @note The record gets a new data.var.id, unique within the table.
  */
 bool symtable_insert_var(SymTable *table, const char *key, data_type type, bool is_mutable);
 
@@ -165,6 +167,8 @@ bool symtable_insert_var(SymTable *table, const char *key, data_type type, bool 
  * @param type Parameter type metadata.
  * @return true on success; false for invalid input, no active scope,
  * a duplicate in the current scope, or allocation failure.
+ *
+ * @note The record gets a new data.var.id, unique within the table.
  */
 bool symtable_insert_param(SymTable *table, const char *key, data_type type);
 

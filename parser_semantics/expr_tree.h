@@ -15,6 +15,8 @@
  *  - DIV / IDIV and ADD / CONCAT are already resolved
  *  - parentheses and unary plus produce no node
  *  - result of a relational operator has type type_bool
+ *  - EXPR_VAR carries u.var.id from the symbol table: same name in different
+ *    scopes (shadowing) has a different id, e.g. use LF@name$id
  */
 
 // kind of node
@@ -23,7 +25,7 @@ typedef enum {
   EXPR_DOUBLE_LIT, // Double literal         -> u.d_val
   EXPR_STRING_LIT, // String literal         -> u.s_val (raw value, not escaped)
   EXPR_UNIT_LIT,   // Unit literal ()        -> no data
-  EXPR_VAR,        // variable / parameter   -> u.var_name
+  EXPR_VAR,        // variable / parameter   -> u.var (name + id)
   EXPR_BINARY,     // binary operation       -> u.bin
   EXPR_NEG,        // unary minus            -> u.operand
   EXPR_INT2FLOAT   // implicit Int -> Double -> u.operand
@@ -50,10 +52,13 @@ typedef struct ExprNode {
   ExprKind kind;  // what the node is
   data_type type; // result type of this node
   union {
-    int i_val;      // EXPR_INT_LIT
-    double d_val;   // EXPR_DOUBLE_LIT
-    char *s_val;    // EXPR_STRING_LIT (owned by node)
-    char *var_name; // EXPR_VAR (owned by node)
+    int i_val;    // EXPR_INT_LIT
+    double d_val; // EXPR_DOUBLE_LIT
+    char *s_val;  // EXPR_STRING_LIT (owned by node)
+    struct {
+      char *name;  // variable name (owned by node)
+      unsigned id; // unique id from symtable (data.var.id)
+    } var;         // EXPR_VAR
     struct {
       ExprOp op;              // operator
       struct ExprNode *left;  // left operand (evaluated first)
@@ -69,7 +74,7 @@ ExprNode *expr_new(ExprKind kind, data_type type);
 // Frees the whole subtree including owned strings; NULL is accepted
 void expr_free(ExprNode *node);
 
-// Debug print of the tree in prefix form, e.g. (+ int (var x int) 1)
+// Debug print of the tree in prefix form, e.g. (+ int (var x$0 int) 1)
 void expr_dump(const ExprNode *node, FILE *out);
 
 #endif // EXPR_TREE_H

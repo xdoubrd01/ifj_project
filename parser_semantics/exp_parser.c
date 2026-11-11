@@ -217,6 +217,7 @@ static int read_token(Token *current, Token *saved, bool *use_saved) {
 static int make_term_node(SymTable *st, Stack_Item *item, ExprNode **out) {
   ExprNode *node = NULL;
   data_type type;
+  unsigned id; // unique variable id from symtable
   int rc;
 
   switch (item->token_type) {
@@ -241,13 +242,14 @@ static int make_term_node(SymTable *st, Stack_Item *item, ExprNode **out) {
     break;
   case TOKEN_IDENTIFIER:
     // variable must be visible and have a known type (3 / 6)
-    if ((rc = sem_get_variable_type(st, item->token.attribute.s_val, &type)) !=
-        0) {
+    if ((rc = sem_get_variable_type(st, item->token.attribute.s_val, &type,
+                                    &id)) != 0) {
       return rc;
     }
     node = expr_new(EXPR_VAR, type);
     if (node != NULL) {
-      node->u.var_name = item->token.attribute.s_val; // ownership -> node
+      node->u.var.name = item->token.attribute.s_val; // ownership -> node
+      node->u.var.id = id;                            // shadowing resolved
       item->token.attribute.s_val = NULL;
     }
     break;

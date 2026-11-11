@@ -36,6 +36,7 @@ struct SymTable {
     Scope     *current_scope;
     size_t     initial_capacity;
     size_t     scope_depth;
+    unsigned   next_var_id; /**< Id assigned to the next variable or parameter. */
 };
 
 /* Internal helpers. */
@@ -110,6 +111,7 @@ SymTable *symtable_create(size_t initial_capacity) {
      */
     table->current_scope    = NULL;
     table->scope_depth      = 0;
+    table->next_var_id      = 0;
     table->initial_capacity = normalized_capacity(initial_capacity);
 
     /* Function symbols are stored separately from local variables. */
@@ -308,6 +310,7 @@ bool symtable_insert_var(SymTable *table, const char *key, data_type type, bool 
     symbol->data.var.var_type     = type;
     symbol->data.var.is_mutable   = is_mutable;
     symbol->data.var.is_parameter = false;
+    symbol->data.var.id           = table->next_var_id;
 
     /* Release the new record if insertion cannot take ownership of it. */
     if (!ht_insert(table->current_scope->table, key, symbol)) {
@@ -315,7 +318,11 @@ bool symtable_insert_var(SymTable *table, const char *key, data_type type, bool 
         return false;
     }
 
-    /* The symbol table owns the record; the hash table owns the copied key. */
+    /*
+     * Ids are never reused, so equal names from different scopes stay distinct.
+     * The symbol table owns the record; the hash table owns the copied key.
+     */
+    table->next_var_id++;
     return true;
 }
 
@@ -342,6 +349,7 @@ bool symtable_insert_param(SymTable *table, const char *key, data_type type) {
     symbol->data.var.var_type     = type;
     symbol->data.var.is_mutable   = false;
     symbol->data.var.is_parameter = true;
+    symbol->data.var.id           = table->next_var_id;
 
     /* Failed insertion leaves cleanup of the new record to this function. */
     if (!ht_insert(table->current_scope->table, key, symbol)) {
@@ -349,6 +357,8 @@ bool symtable_insert_param(SymTable *table, const char *key, data_type type) {
         return false;
     }
 
+    /* Parameters share the id sequence with ordinary variables. */
+    table->next_var_id++;
     return true;
 }
 
