@@ -1,0 +1,107 @@
+// AI START
+#include "expr_tree.h"
+#include <stdlib.h>
+
+ExprNode *expr_new(ExprKind kind, data_type type) {
+  ExprNode *node = calloc(1, sizeof(ExprNode)); // zeroed -> pointers are NULL
+  if (node == NULL) {
+    return NULL; // caller reports error 99
+  }
+  node->kind = kind;
+  node->type = type;
+  return node;
+}
+
+void expr_free(ExprNode *node) {
+  if (node == NULL) {
+    return;
+  }
+  switch (node->kind) {
+  case EXPR_STRING_LIT:
+    free(node->u.s_val); // owned string value
+    break;
+  case EXPR_VAR:
+    free(node->u.var_name); // owned identifier
+    break;
+  case EXPR_BINARY:
+    expr_free(node->u.bin.left); // recursively free both operands
+    expr_free(node->u.bin.right);
+    break;
+  case EXPR_NEG:
+  case EXPR_INT2FLOAT:
+    expr_free(node->u.operand); // single operand
+    break;
+  default:
+    break; // literals without heap data
+  }
+  free(node);
+}
+
+// type name for debug output
+static const char *type_name(data_type type) {
+  switch (type) {
+  case type_int:
+    return "int";
+  case type_double:
+    return "double";
+  case type_string:
+    return "string";
+  case type_unit:
+    return "unit";
+  case type_bool:
+    return "bool";
+  case type_any:
+    return "any";
+  default:
+    return "unknown";
+  }
+}
+
+// operator name for debug output
+static const char *op_name(ExprOp op) {
+  static const char *names[] = {"+",  "-",  "*", "/",  "idiv", "concat",
+                                "==", "!=", "<", "<=", ">",    ">="};
+  return names[op];
+}
+
+void expr_dump(const ExprNode *node, FILE *out) {
+  if (node == NULL) {
+    fprintf(out, "(null)");
+    return;
+  }
+  switch (node->kind) {
+  case EXPR_INT_LIT:
+    fprintf(out, "%d", node->u.i_val);
+    break;
+  case EXPR_DOUBLE_LIT:
+    fprintf(out, "%g", node->u.d_val);
+    break;
+  case EXPR_STRING_LIT:
+    fprintf(out, "\"%s\"", node->u.s_val);
+    break;
+  case EXPR_UNIT_LIT:
+    fprintf(out, "()");
+    break;
+  case EXPR_VAR:
+    fprintf(out, "(var %s %s)", node->u.var_name, type_name(node->type));
+    break;
+  case EXPR_BINARY:
+    fprintf(out, "(%s %s ", op_name(node->u.bin.op), type_name(node->type));
+    expr_dump(node->u.bin.left, out);
+    fprintf(out, " ");
+    expr_dump(node->u.bin.right, out);
+    fprintf(out, ")");
+    break;
+  case EXPR_NEG:
+    fprintf(out, "(neg %s ", type_name(node->type));
+    expr_dump(node->u.operand, out);
+    fprintf(out, ")");
+    break;
+  case EXPR_INT2FLOAT:
+    fprintf(out, "(int2float ");
+    expr_dump(node->u.operand, out);
+    fprintf(out, ")");
+    break;
+  }
+}
+// AI END

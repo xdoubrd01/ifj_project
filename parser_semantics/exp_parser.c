@@ -21,7 +21,8 @@ typedef enum {
 } prec_idx_t;
 
 // Function to get the precedence index (prec_idx_t) for a given token
-prec_idx_t get_precedence_index(TokenType current_type, TokenType prev_type) {
+static prec_idx_t get_precedence_index(TokenType current_type, // AI - UPDATED
+                                       TokenType prev_type) {
   switch (current_type) {
   case TOKEN_PLUS:
   case TOKEN_MINUS:
@@ -55,8 +56,7 @@ prec_idx_t get_precedence_index(TokenType current_type, TokenType prev_type) {
   case TOKEN_STRING_LITERAL:
   case TOKEN_IDENTIFIER:
     return PREC_IDX_VALUE;
-  case TOKEN_EOF:
-  case TOKEN_EOF:
+  case TOKEN_EOF: // AI - UPDATED: duplicate 'case TOKEN_EOF' removed
   case TOKEN_EOL:
   case TOKEN_SEMICOLON:
   case TOKEN_KW_DO:
@@ -76,7 +76,22 @@ prec_idx_t get_precedence_index(TokenType current_type, TokenType prev_type) {
  * E = error (syntax error)
  * = = equal precedence (used to match parentheses "()")
  */
-char prec_table[9][9] = {
+// AI START
+/*
+ * POZNAMKY K TABULCE (tabulka nezmenena, jen komentare):
+ *  - REL x REL a EQ x EQ = 'E' -> "a < b < c", "a == b == c" je chyba 2.
+ *    Zadani: relacni operatory "bez asociativity", retezeni neni povoleno.
+ *  - REL ma vyssi prioritu nez EQ (row REL / col EQ = '>'), odpovida zadani
+ *    (priorita 4 vs 5). "a < b == c" projde syntaxi, ale semantika vrati 6
+ *    (Boolean neni bez BOOLTHEN hodnota) - zadani neuvadi, zda 2 nebo 6.
+ *  - ( x ) = '=' -> "()" je literal Unit; redukce E -> ( ) je doplnena
+ *    v parse_expression (tabulka zmenu nepotrebuje).
+ *  - value x ( = 'E' -> volani funkce ve vyrazu nejde (FUNEXP neni).
+ *  - EOF x ) = 'E', ale ')' na dne zasobniku ukoncuje vyraz (is_stop_token).
+ */
+// AI END
+// AI - UPDATED: static
+static char prec_table[9][9] = {
     // +-   */   <=>  ==!=  (    )   val  EOF  UNARY
     {'>', '<', '>', '>', '<', '>', '<', '>', '<'}, // +-
     {'>', '>', '>', '>', '<', '>', '<', '>', '<'}, // */
@@ -103,16 +118,17 @@ typedef enum {
 typedef struct {
   Symbol_type type;
   TokenType token_type; // The token associated with the symbol
-  data_type data_type;  // The data type of the expression (if applicable)
+  ExprNode *node;       // AI - UPDATED: subtree of a non-terminal (owned)
   prec_idx_t prec_idx;  // The precedence index of the symbol
   Token token;          // Store the actual token for semantic analysis
 } Stack_Item;
 
-#define STACK_MAX_SIZE 100        // Maximum size of the stack
-Stack_Item stack[STACK_MAX_SIZE]; // Stack for the precedence parser
-int stack_top = -1;               // Index of the top of the stack
+// AI - UPDATED: 100 -> 1000, 100 overflowed already at ~49 nested '('
+#define STACK_MAX_SIZE 1000              // Maximum size of the stack
+static Stack_Item stack[STACK_MAX_SIZE]; // AI - UPDATED: static
+static int stack_top = -1;               // AI - UPDATED: static
 
-void push(Stack_Item item) {
+static void push(Stack_Item item) { // AI - UPDATED: static
   if (stack_top < STACK_MAX_SIZE - 1) {
     stack[++stack_top] = item;
   } else {
@@ -121,7 +137,7 @@ void push(Stack_Item item) {
   }
 }
 
-Stack_Item pop() {
+static Stack_Item pop(void) { // AI - UPDATED: static
   if (stack_top >= 0) {
     return stack[stack_top--];
   } else {
@@ -130,16 +146,7 @@ Stack_Item pop() {
   }
 }
 
-Stack_Item top() {
-  if (stack_top >= 0) {
-    return stack[stack_top];
-  } else {
-    fprintf(stderr, "Stack is empty\n");
-    exit(99);
-  }
-}
-
-Stack_Item get_top_terminal() {
+static Stack_Item get_top_terminal(void) { // AI - UPDATED: static
   for (int i = stack_top; i >= 0; i--) {
     if (stack[i].type == SYM_TERMINAL || stack[i].type == SYM_STOP) {
       return stack[i];
@@ -149,43 +156,127 @@ Stack_Item get_top_terminal() {
   exit(99);
 }
 
-void insert_shift_marker() {
+// AI - UPDATED START
+// Inserts '<' marker right AFTER the topmost terminal (or stop symbol),
+// e.g. "$ E" + shift '+'  ->  "$ < E +"
+static void insert_shift_marker(void) {
   int top_index = stack_top;
-  while (top_index >= 0 && stack[top_index].type != SYM_NON_TERMINAL) {
-    top_index--;
+  while (top_index >= 0 && stack[top_index].type != SYM_TERMINAL &&
+         stack[top_index].type != SYM_STOP) {
+    top_index--; // skip non-terminals above the top terminal
   }
 
-  if (top_index >= STACK_MAX_SIZE - 1) {
+  if (stack_top >= STACK_MAX_SIZE - 1) {
     fprintf(stderr, "Stack overflow while inserting shift marker\n");
     exit(99);
   }
 
   for (int i = stack_top; i > top_index; i--) {
-    stack[i + 1] = stack[i];
+    stack[i + 1] = stack[i]; // move non-terminals one position up
   }
 
   Stack_Item marker = {.type = SYM_SHIFT_MARKER, .token_type = TOKEN_EOF};
   stack[top_index + 1] = marker;
   stack_top++;
 }
+// AI - UPDATED END
 
-// this function prints a string in IFJcode26 format, escaping special
-// characters
-void print_ifj_string(const char *str) {
-  if (!str)
-    return;
-  while (*str) {
-    unsigned char c = (unsigned char)(*str);
-    if (c <= 32 || c == 35 || c == 92) { // 35 = #, 92 = \ 
-            printf("\\%03d", c);
-    } else {
-      putchar(c);
-    }
-    str++;
+// AI START
+// Frees heap data owned by one stack item
+static void free_item(Stack_Item *item) {
+  if (item->type == SYM_NON_TERMINAL) {
+    expr_free(item->node); // subtree
+    item->node = NULL;
+  } else if (item->type == SYM_TERMINAL &&
+             (item->token_type == TOKEN_IDENTIFIER ||
+              item->token_type == TOKEN_STRING_LITERAL)) {
+    free(item->token.attribute.s_val); // lexeme from scanner
+    item->token.attribute.s_val = NULL;
   }
 }
 
-int parse_expression(hashtable *ts) {
+// Empties the stack and frees everything in it (used on error)
+static void stack_clear(void) {
+  while (stack_top >= 0) {
+    free_item(&stack[stack_top]);
+    stack_top--;
+  }
+}
+
+// Reads the next token; returns the caller's lookahead first if it is saved
+static int read_token(Token *current, Token *saved, bool *use_saved) {
+  if (*use_saved) {
+    *current = *saved; // token already read by parser
+    *use_saved = false;
+    return 0;
+  }
+  return get_next_token(current); // 0, 1 lexical, 99 internal
+}
+
+// Rule E -> term: creates a leaf node, takes over s_val of the token
+static int make_term_node(SymTable *st, Stack_Item *item, ExprNode **out) {
+  ExprNode *node = NULL;
+  data_type type;
+  int rc;
+
+  switch (item->token_type) {
+  case TOKEN_INT_LITERAL:
+    node = expr_new(EXPR_INT_LIT, type_int);
+    if (node != NULL) {
+      node->u.i_val = item->token.attribute.i_val;
+    }
+    break;
+  case TOKEN_DOUBLE_LITERAL:
+    node = expr_new(EXPR_DOUBLE_LIT, type_double);
+    if (node != NULL) {
+      node->u.d_val = item->token.attribute.d_val;
+    }
+    break;
+  case TOKEN_STRING_LITERAL:
+    node = expr_new(EXPR_STRING_LIT, type_string);
+    if (node != NULL) {
+      node->u.s_val = item->token.attribute.s_val; // ownership -> node
+      item->token.attribute.s_val = NULL;
+    }
+    break;
+  case TOKEN_IDENTIFIER:
+    // variable must be visible and have a known type (3 / 6)
+    if ((rc = sem_get_variable_type(st, item->token.attribute.s_val, &type)) !=
+        0) {
+      return rc;
+    }
+    node = expr_new(EXPR_VAR, type);
+    if (node != NULL) {
+      node->u.var_name = item->token.attribute.s_val; // ownership -> node
+      item->token.attribute.s_val = NULL;
+    }
+    break;
+  default:
+    // operator alone, e.g. "a *" at the end of expression
+    fprintf(stderr, "Syntax error: missing operand\n");
+    return 2;
+  }
+
+  if (node == NULL) {
+    fprintf(stderr, "Internal error (99): out of memory\n");
+    return 99;
+  }
+  *out = node;
+  return 0;
+}
+// AI END
+
+int parse_expression(SymTable *st, Token *pending, Token *tok, // AI - UPDATED
+                     ExprNode **out) {
+  // AI START
+  *out = NULL;                // nothing on error
+  stack_top = -1;             // reset stack from previous call
+  int rc = 0;                 // error code for the error label
+  bool use_saved = false;     // *tok still waits to be read
+  Stack_Item popped_items[4]; // handle of the current reduction
+  int pop_count = 0;          // number of valid popped_items
+  // AI END
+
   // Initialize the stack with a stop symbol
   Stack_Item stop_item = {
       .type = SYM_STOP, .token_type = TOKEN_EOF, .prec_idx = PREC_IDX_EOF};
@@ -194,14 +285,14 @@ int parse_expression(hashtable *ts) {
   TokenType prev_token_type = TOKEN_EOF; // OPRAVENO
   Token current_token;
 
-if (first_token != NULL) {
-    current_token = *first_token; // use first token
+  // AI - UPDATED START
+  if (pending != NULL) {
+    current_token = *pending; // identifier already read by parser
+    use_saved = true;         // *tok comes next
   } else {
-    if (get_next_token(&current_token) != 0) {
-      fprintf(stderr, "Lexical error while getting the first token\n");
-      return 1; 
-    }
+    current_token = *tok; // first token of the expression
   }
+  // AI - UPDATED END
 
   while (1) {
     // Get the top terminal from the stack and determine precedence
@@ -216,15 +307,17 @@ if (first_token != NULL) {
       column_idx = PREC_IDX_EOF; // Treat unrecognized tokens as EOF
     }
 
-    // STOP CONDITION if EOF or RPAREN without LPAREN
-    bool is_stop_token = (column_idx == PREC_IDX_EOF || current_token.type == TOKEN_RPAREN);
+    // STOP CONDITION
+    bool is_stop_token =
+        (column_idx == PREC_IDX_EOF || current_token.type == TOKEN_RPAREN);
 
     if (is_stop_token && top_terminal.prec_idx == PREC_IDX_EOF) {
       if (stack_top == 1 && stack[1].type == SYM_NON_TERMINAL) {
         break; // END OF WHILE CYCLE
       } else {
         fprintf(stderr, "Syntax error: invalid or empty expression\n");
-        return 2;
+        rc = 2;     // AI - UPDATED
+        goto error; // AI - UPDATED
       }
     }
 
@@ -237,50 +330,44 @@ if (first_token != NULL) {
       Stack_Item new_item = {
           .type = SYM_TERMINAL,
           .token_type = current_token.type,
+          .node = NULL, // AI - UPDATED: type is resolved at reduction
           .prec_idx = column_idx,
           .token = current_token // saves lexem
       };
 
-      if (current_token.type == TOKEN_INT_LITERAL) {
-        new_item.data_type = type_int;
-      } else if (current_token.type == TOKEN_DOUBLE_LITERAL) {
-        new_item.data_type = type_double;
-      } else if (current_token.type == TOKEN_STRING_LITERAL) {
-        new_item.data_type = type_string;
-      } else if (current_token.type == TOKEN_IDENTIFIER) {
-        new_item.data_type =
-            sem_get_variable_type(ts, current_token.attribute.s_val);
-      } else {
-        new_item.data_type = type_unit;
-      }
-
       push(new_item);
       prev_token_type = current_token.type;
 
-      if (get_next_token(&current_token) != 0) {
+      // AI - UPDATED START
+      if ((rc = read_token(&current_token, tok, &use_saved)) != 0) {
         fprintf(stderr, "Lexical error while getting the next token\n");
-        return 1; // Lexical error
+        current_token.type = TOKEN_EOF; // attributes are invalid
+        goto error;
       }
+      // AI - UPDATED END
 
       // match
     } else if (precedence_relation == '=') {
       Stack_Item new_item = {.type = SYM_TERMINAL,
                              .token_type = current_token.type,
+                             .node = NULL, // AI - UPDATED
                              .prec_idx = column_idx,
                              .token = current_token};
 
       push(new_item);
       prev_token_type = current_token.type;
 
-      if (get_next_token(&current_token) != 0) {
+      // AI - UPDATED START
+      if ((rc = read_token(&current_token, tok, &use_saved)) != 0) {
         fprintf(stderr, "Lexical error while getting the next token\n");
-        return 1;
+        current_token.type = TOKEN_EOF; // attributes are invalid
+        goto error;
       }
+      // AI - UPDATED END
 
       // reduction
     } else if (precedence_relation == '>') {
-      Stack_Item popped_items[4];
-      int pop_count = 0;
+      pop_count = 0; // AI - UPDATED: popped_items declared at the top
       bool found_shift_marker = false;
 
       while (stack_top >= 0) {
@@ -294,93 +381,71 @@ if (first_token != NULL) {
           pop_count++;
         } else {
           fprintf(stderr, "Syntax error: too many items to reduce\n");
-          return 2;
+          free_item(&item); // AI - UPDATED
+          rc = 2;           // AI - UPDATED
+          goto error;       // AI - UPDATED
         }
       }
 
       if (!found_shift_marker) {
         fprintf(stderr,
                 "Syntax error: no shift marker found during reduction\n");
-        return 2;
+        rc = 2;     // AI - UPDATED
+        goto error; // AI - UPDATED
       }
+
+      // AI - UPDATED: result of every rule is one non-terminal with a node
+      Stack_Item new_item = {
+          .type = SYM_NON_TERMINAL, .token_type = TOKEN_EOF, .node = NULL};
 
       // E -> id / value
       if (pop_count == 1 && popped_items[0].type == SYM_TERMINAL) {
-        Stack_Item item = popped_items[0];
-
-        // Semantic action: push the value onto the stack in IFJcode26
-        if (item.token_type == TOKEN_INT_LITERAL) {
-          printf("PUSHS int@%d\n", item.token.attribute.i_val);
-        } else if (item.token_type == TOKEN_DOUBLE_LITERAL) {
-          printf("PUSHS float@%a\n",
-                 item.token.attribute.d_val); // %a for double
-        } else if (item.token_type == TOKEN_STRING_LITERAL) {
-          printf("PUSHS string@");
-          print_ifj_string(item.token.attribute.s_val);
-          printf("\n");
-        } else if (item.token_type == TOKEN_IDENTIFIER) {
-          printf("PUSHS LF@%s\n", item.token.attribute.s_val);
+        // AI - UPDATED START
+        rc = make_term_node(st, &popped_items[0], &new_item.node);
+        if (rc != 0) {
+          goto error;
         }
-
-        Stack_Item new_item = {.type = SYM_NON_TERMINAL,
-                               .token_type = TOKEN_EOF,
-                               .data_type = item.data_type};
         push(new_item);
+        // AI - UPDATED END
 
         // 2: E -> E op E
       } else if (pop_count == 3 && popped_items[0].type == SYM_NON_TERMINAL &&
                  popped_items[1].type == SYM_TERMINAL &&
                  popped_items[2].type == SYM_NON_TERMINAL) {
 
-        Stack_Item left_operand = popped_items[2];
-        Stack_Item op_item = popped_items[1];
-        Stack_Item right_operand = popped_items[0];
-        TokenType op = op_item.token_type;
-
-        Stack_Item new_item = {.type = SYM_NON_TERMINAL,
-                               .token_type = TOKEN_EOF};
-
-        new_item.data_type = sem_get_binary_op_result(
-            op, left_operand.data_type, right_operand.data_type);
-
-        // generate IFJcode26 operations
-        if (op == TOKEN_PLUS) {
-          if (new_item.data_type == type_string) {
-            // right operand
-            printf("POPS GF@%%tmp2\n");
-            // left operand
-            printf("POPS GF@%%tmp1\n");
-            // konkatenace
-            printf("CONCAT GF@%%tmp3 GF@%%tmp1 GF@%%tmp2\n");
-            // return result back to stack
-            printf("PUSHS GF@%%tmp3\n");
-          } else {
-            printf("ADDS\n");
-          }
-        } else if (op == TOKEN_MINUS) {
-          printf("SUBS\n");
-        } else if (op == TOKEN_MUL) {
-          printf("MULS\n");
-        } else if (op == TOKEN_DIV) {
-          if (new_item.data_type == type_int)
-            printf("IDIVS\n");
-          else
-            printf("DIVS\n");
-        } else if (op == TOKEN_EQ) {
-          printf("EQS\n");
-        } else if (op == TOKEN_NEQ) {
-          printf("EQS\nNOTS\n");
-        } else if (op == TOKEN_LT) {
-          printf("LTS\n");
-        } else if (op == TOKEN_LEQ) {
-          printf("GTS\nNOTS\n");
-        } else if (op == TOKEN_GT) {
-          printf("GTS\n");
-        } else if (op == TOKEN_GEQ) {
-          printf("LTS\nNOTS\n");
+        // AI - UPDATED START
+        Stack_Item *op_item = &popped_items[1];
+        if (op_item->prec_idx != PREC_IDX_ADD_SUB &&
+            op_item->prec_idx != PREC_IDX_MUL_DIV &&
+            op_item->prec_idx != PREC_IDX_RELATION &&
+            op_item->prec_idx != PREC_IDX_EQ) {
+          fprintf(stderr, "Syntax error: expected binary operator\n");
+          rc = 2;
+          goto error;
         }
 
+        ExprOp op;      // resolved operator (DIV/IDIV, ADD/CONCAT ...)
+        data_type type; // result type
+        // left = popped_items[2], right = popped_items[0]; may get INT2FLOAT
+        rc = sem_binary_op(op_item->token_type, &popped_items[2].node,
+                           &popped_items[0].node, &op, &type);
+        if (rc != 0) {
+          goto error;
+        }
+
+        new_item.node = expr_new(EXPR_BINARY, type);
+        if (new_item.node == NULL) {
+          fprintf(stderr, "Internal error (99): out of memory\n");
+          rc = 99;
+          goto error;
+        }
+        new_item.node->u.bin.op = op;
+        new_item.node->u.bin.left = popped_items[2].node; // ownership -> node
+        new_item.node->u.bin.right = popped_items[0].node;
+        popped_items[2].node = NULL;
+        popped_items[0].node = NULL;
         push(new_item);
+        // AI - UPDATED END
 
         // 3: E -> ( E )
       } else if (pop_count == 3 && popped_items[0].type == SYM_TERMINAL &&
@@ -390,66 +455,79 @@ if (first_token != NULL) {
                  popped_items[2].token_type == TOKEN_LPAREN) {
 
         // Závorky negenerují kód, pouze posílají non-terminál dál
-        Stack_Item new_item = {
-            .type = SYM_NON_TERMINAL,
-            .token_type = TOKEN_EOF,
-            .data_type = popped_items[1].data_type // Preserve data type
-        };
+        new_item.node = popped_items[1].node; // AI - UPDATED: pass subtree
+        popped_items[1].node = NULL;          // AI - UPDATED
         push(new_item);
+
+        // AI START
+        // E -> ( )   Unit literal
+      } else if (pop_count == 2 && popped_items[0].type == SYM_TERMINAL &&
+                 popped_items[0].token_type == TOKEN_RPAREN &&
+                 popped_items[1].type == SYM_TERMINAL &&
+                 popped_items[1].token_type == TOKEN_LPAREN) {
+
+        new_item.node = expr_new(EXPR_UNIT_LIT, type_unit);
+        if (new_item.node == NULL) {
+          fprintf(stderr, "Internal error (99): out of memory\n");
+          rc = 99;
+          goto error;
+        }
+        push(new_item);
+        // AI END
 
         // 4: E -> unary_op E
       } else if (pop_count == 2 && popped_items[0].type == SYM_NON_TERMINAL &&
                  popped_items[1].type == SYM_TERMINAL &&
-                 (popped_items[1].token_type == TOKEN_PLUS ||
-                  popped_items[1].token_type == TOKEN_MINUS)) {
+                 popped_items[1].prec_idx == PREC_IDX_UNARY) { // AI - UPDATED
 
-        Stack_Item operand = popped_items[0];
+        // AI - UPDATED START
+        // only numbers (6)
+        if ((rc = sem_unary_op(popped_items[0].node)) != 0) {
+          goto error;
+        }
 
         if (popped_items[1].token_type == TOKEN_MINUS) {
-          if (operand.data_type == type_int) {
-            printf("PUSHS int@-1\n");
-          } else {
-            printf("PUSHS float@-0x1.0p+0\n");
+          new_item.node = expr_new(EXPR_NEG, popped_items[0].node->type);
+          if (new_item.node == NULL) {
+            fprintf(stderr, "Internal error (99): out of memory\n");
+            rc = 99;
+            goto error;
           }
-          printf("MULS\n");
-        }
-
-        if (operand.data_type == type_int || operand.data_type == type_double) {
-          Stack_Item new_item = {.type = SYM_NON_TERMINAL,
-                                 .token_type = TOKEN_EOF,
-                                 .data_type = operand.data_type};
-          push(new_item);
+          new_item.node->u.operand = popped_items[0].node; // ownership
         } else {
-          fprintf(stderr, "Semantic error (6): unary operator applied to "
-                          "non-numeric type\n");
-          return 6;
+          new_item.node = popped_items[0].node; // unary plus: no node
         }
+        popped_items[0].node = NULL;
+        push(new_item);
+        // AI - UPDATED END
 
       } else {
         fprintf(stderr, "Syntax error: invalid reduction pattern\n");
-        return 2;
+        rc = 2;     // AI - UPDATED
+        goto error; // AI - UPDATED
       }
+      pop_count = 0; // AI: popped items are consumed
 
     } else if (precedence_relation == 'E') {
       fprintf(stderr, "Syntax error: unrecognized precedence relation\n");
-      return 2;
-    }
-
-    // check for end parsing condition
-    if (column_idx == PREC_IDX_EOF && top_terminal.token_type == TOKEN_EOF) {
-      if (stack_top == 1 && stack[1].type == SYM_NON_TERMINAL) {
-        expr_parsed = true;
-      } else {
-        fprintf(stderr, "Syntax error: unexpected end of input\n");
-        return 2;
-      }
+      rc = 2;     // AI - UPDATED
+      goto error; // AI - UPDATED
     }
   } // END OF WHILE CYCLE (1)
 
-  // Save remaining token, wich ended parsing
-  if (next_token != NULL) {
-    *next_token = current_token;
-  }
+  // AI - UPDATED START
+  *out = stack[1].node; // finished tree ($ E on the stack)
+  stack[1].node = NULL;
+  stack_top = -1;
+  *tok = current_token; // Save remaining token, wich ended parsing
+  return 0;             // Successful parsing
 
-  return 0; // Successful parsing
+error:
+  for (int i = 0; i < pop_count; i++) {
+    free_item(&popped_items[i]); // items of unfinished reduction
+  }
+  stack_clear();        // everything still on the stack
+  *tok = current_token; // caller owns the token where we stopped
+  return rc;
+  // AI - UPDATED END
 }
