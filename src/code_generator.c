@@ -4,6 +4,8 @@
 
 #include <stdio.h>
 #include <stdbool.h>
+#include "symtable.h"
+#include "expr_tree.h"
 
 // -----    functions to generate IFJ26code instructions    -----
 
@@ -45,7 +47,7 @@ void gen_inst4(const char *inst, const char *arg1, const char *arg2, const char 
 // use %a format specifier for printf function
 
 // AI START
-void print_float(const float val) {
+void print_double(const double val) {
     printf("float@%a\n", val);
 }
 
@@ -60,8 +62,8 @@ void print_nil(void) {
     printf("nil@nil\n");
 }
 
-void print_int(const long long int val) {
-    printf("int@%lld\n", val);
+void print_int(const int val) {
+    printf("int@%d\n", val);
 }
 // AI END
 
@@ -78,4 +80,45 @@ void print_string(const char *str) {
         }
     }
     printf("\n");
+}
+
+
+
+void process_expr_leaf(ExprNode node) {
+    switch (node.kind)
+    {
+    case EXPR_INT_LIT:
+        printf("PUSHS ");
+        print_int(node.u.i_val);
+        break;
+    
+    case EXPR_DOUBLE_LIT:
+        printf("PUSHS ");
+        print_double(node.u.d_val);
+
+    case EXPR_STRING_LIT:
+        printf("PUSHS ");
+        print_string(node.u.s_val);
+
+    case EXPR_UNIT_LIT:
+        printf("PUSHS ");
+        print_nil();
+
+    case EXPR_VAR:
+        printf("PUSHS ");
+        printf(node.u.var.id);
+
+    // case EXPR_BINARY:
+        // call post_order()?
+
+    // case EXPR_NEG:
+        // analyse node.u.type, proccess negation of data type (if int -> reverse operand, bool...)
+
+    // case EXPR_INT2FLOAT:
+        // extract value of node.u.s_val, convert to string
+        // if node.u.var, then gen .inst. INT2FLOAT
+
+    default:
+        break;
+    }
 }
