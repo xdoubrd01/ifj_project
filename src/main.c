@@ -1,7 +1,7 @@
 #include "scanner.h"
 #include <stdio.h>
 #include <stdlib.h> // Přidáno pro použití free()
-
+#include "parser.h"
 // Pomocná funkce pro převod typu tokenu na čitelný text
 const char* token_type_to_string(TokenType type) {
     switch (type) {
@@ -95,42 +95,8 @@ int main() {
         return 99;
     }
 
-    scanner_init(source);
+    parse(source);
 
-    Token token;
-    int result;
-
-    while (true) {
-        result = get_next_token(&token);
-
-        if (result != 0) {
-            printf("CHYBA: Lexikální analyzátor vrátil chybový kód %d\n", result);
-            break;
-        }
-
-        printf("Typ: %s", token_type_to_string(token.type));
-
-        // Vypíšeme atribut pro identifikátory a literály a hned uvolníme
-        if (token.type == TOKEN_IDENTIFIER || token.type == TOKEN_STRING_LITERAL) {
-            printf(" | Hodnota: \"%s\"", token.attribute.s_val);
-            // Uvolníme dynamicky alokovanou paměť vrácenou skenerem
-            free(token.attribute.s_val);
-            token.attribute.s_val = NULL; // Bezpečnostní nulování ukazatele
-        } else if (token.type == TOKEN_INT_LITERAL) {
-            printf(" | Hodnota: %d", token.attribute.i_val);
-        } else if (token.type == TOKEN_DOUBLE_LITERAL) {
-            printf(" | Hodnota: %g", token.attribute.d_val);
-        }
-
-        printf("\n");
-
-        if (token.type == TOKEN_EOF) {
-            break;
-        }
-    }
-
-    // Korektní ukončení a smazání globálního bufferu uvnitř skeneru
-    scanner_free();
     fclose(source);
-    return result;
+    return 0;
 }

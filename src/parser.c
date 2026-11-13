@@ -1,5 +1,6 @@
 #include "parser.h"
 #include "scanner.h"
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -40,7 +41,7 @@ static void advance(void) {
     }
 }
 
-void syntax_error(void) {
+_Noreturn void syntax_error(void) {
     fprintf(stderr, "Syntax error: unexpected token: %d\n", tok.type);
 
     exit(2);
@@ -82,7 +83,7 @@ static void parse_prolog(void) {
 /* ---- forward declarations (one function per non-terminal) ---- */
 
 static void parse_prolog(void);
-static void parse_functions();
+static void parse_functions(ParserRound round);
 static void parse_opt_annotation(void);
 static void parse_opt_eol(void);
 static void parse_function(ParserRound round);
@@ -105,28 +106,51 @@ static TokenType peek_token(void){
     return lookahead.type;
 }
 
-static void parse_program(void) {
+static void parse_program(ParserRound round) {
     parse_prolog();
-    parse_functions();
+    parse_functions(round);
     expect(TOKEN_EOF);
 }
 
-void parse(void) {
+void parse(FILE *source) {
     ts = symtable_create(0);
-    if(ts == NULL) syntax_error();
+    if(ts == NULL) exit(99);
+
+    if (!symtable_insert_builtins(ts)) {
+        exit(99);
+    }
+
+    //first round
+    scanner_init(source);
     advance();
-    parse_program();
-    scanner_free(); 
+    parse_program(FIRST_ROUND);
+
+    // second round preparation
+    if (has_lookahead) {
+        if (lookahead.type == TOKEN_IDENTIFIER ||lookahead.type == TOKEN_STRING_LITERAL) {
+            free(lookahead.attribute.s_val);
+        }
+        has_lookahead = false;
+    }
+    scanner_free();
+    rewind(source);
+    scanner_init(source);
+
+    //second round
+    advance();
+    parse_program(SECOND_ROUND);
+    
+    scanner_free();
 }
 
-static void parse_functions(void) {
+static void parse_functions(ParserRound round) {
     while(tok.type == TOKEN_EOL){
         advance();
     }
 
     if (tok.type == TOKEN_KW_DEF || tok.type == TOKEN_AT_MAIN){
-    parse_function();
-    parse_functions();
+    parse_function(round);
+    parse_functions(round);
     }
 }
 
@@ -338,6 +362,7 @@ static data_type parse_type(void) {
     else{
         
         syntax_error();
+        exit(2);
     }
 }
 
@@ -392,14 +417,14 @@ static void parse_call_arguments(void){
     }
 }
 
-static void parse_call_or_exp_opt(void){
+/*static void parse_call_or_exp_opt(void){
     if(tok.type == TOKEN_LPAREN){
         advance();
         parse_call_arguments();
         expect(TOKEN_RPAREN);
     }
     else parse_expr_tail();
-}
+}*/
 
 static void parse_non_id_expression(void){
   if (tok.type == TOKEN_DOUBLE_LITERAL ||
@@ -420,26 +445,105 @@ static int is_non_id_expression(TokenType t){
 
 }
 
-static ExprNode *parse_call_or_exp(void) {
+static data_type parse_function_call(void) {
+    if(tok.type == TOKEN_IDENTIFIER){
+
+        char *function_name = strdup(tok.attribute.s_val);
+        if (function_name == NULL) exit(99);
+
+            symbol_data *function = symtable_search_func(ts, function_name);
+
+        if (function == NULL) {
+            fprintf(stderr, "Undefined function: %s\n", function_name);
+            free(function_name);
+            exit(3); 
+        }
+        advance();
+        expect(TOKEN_LPAREN);
+
+        size_t arg_count = 0;
+        if (tok.type != TOKEN_RPAREN) {
+            ExprNode *arg = parse_expression_wrapper();
+            if (arg == NULL) exit(99);
+
+            data_type arg_type = arg->type;
+            expr_free(arg);
+
+            if (arg_count >= function->data.func.param_count) {
+                free(function_name);
+                exit(5);
+            }
+
+            data_type expected_type = function->data.func.params[arg_count];
+
+            if (expected_type != type_any && arg_type != expected_type) {
+                free(function_name);
+                exit(5);
+            }
+
+            arg_count++;
+
+            while (tok.type == TOKEN_COMMA) {
+                advance(); 
+
+        
+                ExprNode *arg = parse_expression_wrapper();
+                if (arg == NULL) exit(99);
+
+                
+                data_type type = arg->type;
+                expr_free(arg);
+
+                
+                if (arg_count >= function->data.func.param_count) {
+                    exit(5);
+                }
+
+                
+                data_type expected = function->data.func.params[arg_count];
+
+                if (expected != type_any && type != expected) {
+                    exit(5);
+                }
+
+                arg_count++;
+            }
+        }
+            expect(TOKEN_RPAREN);
+
+            if (arg_count != function->data.func.param_count) {
+                free(function_name);
+                exit(5);
+            }
+
+            data_type return_type = function->data.func.ret_type;
+
+            free(function_name);
+            return return_type;
+        }                                 
+    
+    else {
+    syntax_error();
+    }
+}
+
+static data_type parse_call_or_exp(void) {
     if (tok.type == TOKEN_IDENTIFIER &&
         peek_token() == TOKEN_LPAREN) {
 
-      char *function_name = strdup(tok.attribute.s_val);
-      if (function_name == NULL) exit(99);
-
-      symbol_data *function = symtable_search_func(ts, function_name);
-
-      if (function == NULL) {
-        fprintf(stderr, "Undefined function: %s\n", function_name);
-        free(function_name);
-        exit(3); 
-    }
-
+            return parse_function_call();
+     
     } else if (tok.type == TOKEN_IDENTIFIER ||
                is_non_id_expression(tok.type)) {
 
         
-        return parse_expression_wrapper();
+        ExprNode *expr = parse_expression_wrapper();
+        if(expr == NULL) exit(99);
+
+        data_type result_type = expr->type;
+        expr_free(expr);
+
+        return result_type;
 
     } else {
         syntax_error();
@@ -540,32 +644,17 @@ static void parse_stmt(void) {
         
         expect(TOKEN_IDENTIFIER);
         data_type var_type = parse_opt_type();
-       ExprNode *expr = parse_call_or_exp();
 
-        if (expr == NULL) {
-            exit(99);
-        }
-
-        data_type expr_type = expr->type;
-
-        int rc = sem_declare_variable(
-            ts,
-            var_name,
-            var_type,
-            expr_type,
-            is_var,
-            NULL
-        );
+        data_type expr_type = parse_call_or_exp();
+        int rc = sem_declare_variable(ts, var_name, var_type, expr_type, is_var, NULL);
 
         if (rc != 0) {
-            expr_free(expr);
             free(var_name);
             exit(rc);
         }
 
-        expr_free(expr);
         free(var_name);
-
+            
         parse_stmt_tail();
     }
 
