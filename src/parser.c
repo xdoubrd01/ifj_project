@@ -12,6 +12,12 @@ static Token lookahead;
 static bool has_lookahead = false;
 static SymTable *ts = NULL;
 
+typedef enum {
+    FIRST_ROUND,
+    SECOND_ROUND
+} ParserRound;
+
+
 static void advance(void) {
     // Uvolnění aktuálního tokenu
     if (tok.type == TOKEN_IDENTIFIER ||
@@ -76,10 +82,10 @@ static void parse_prolog(void) {
 /* ---- forward declarations (one function per non-terminal) ---- */
 
 static void parse_prolog(void);
-static void parse_functions(void);
+static void parse_functions();
 static void parse_opt_annotation(void);
 static void parse_opt_eol(void);
-static void parse_function(void);
+static void parse_function(ParserRound round);
 static void parse_block(void);
 static data_type parse_type(void);
 static void parse_stmts(void);
@@ -202,14 +208,45 @@ static void parse_parameters_list(data_type **types, size_t *count){
     }
 }
 
-static void parse_opt_return_type(void){
+static data_type parse_opt_return_type(void){
     if(tok.type == TOKEN_COLON){
         advance();
-        parse_type();
+        data_type ret_type = parse_type();
+
+        return ret_type;
+    }
+
+    return type_unknown;
+}
+
+static void skip_function_body(void){
+    if(tok.type == TOKEN_EOL){
+        int depth = 0;
+        advance();
+        expect(TOKEN_INDENT);
+        depth++;
+
+        while(depth > 0){
+            if(tok.type == TOKEN_EOF) syntax_error();
+            if(tok.type == TOKEN_INDENT) depth ++;
+            if(tok.type == TOKEN_DEDENT) depth --;
+             advance();
+        }
+    }
+
+    else {
+        while (tok.type != TOKEN_EOL && tok.type != TOKEN_EOF) {
+            advance();
+        }
+
+        if (tok.type == TOKEN_EOL) {
+            advance();
+        }
     }
 }
 
-static void parse_function(void) {
+
+static void parse_function(ParserRound round) {
     parse_opt_annotation();
     expect(TOKEN_KW_DEF);
 
@@ -232,11 +269,43 @@ static void parse_function(void) {
     expect(TOKEN_LPAREN);
     parse_parameters_list(&param_types, &param_count);
     expect(TOKEN_RPAREN);
-    parse_opt_return_type();
+    data_type ret_type = parse_opt_return_type();
+
+    if(round == FIRST_ROUND){
+        /*
+    * AI-generated code (ChatGPT).
+    * Prompt: "vygeneruj kod pro registraci funkce do tabulky symbolu
+    * pomoci symtable_insert_func(), vcetne kontroly uspesnosti vlozeni
+    * a uvolneni alokovane pameti pri chybe."
+    */
+        bool success = symtable_insert_func(
+            ts,
+            func_name,
+            ret_type,
+            param_count,
+            param_types
+        );
+
+        if (!success) {
+            free(func_name);
+            free(param_types);
+            exit(4);
+        }
+    }
     expect(TOKEN_ASSIGN);
-    parse_function_body();
+
+    if(round == FIRST_ROUND){
+        skip_function_body();
+    }
+
+    else{
+        parse_function_body();
+    }
 
     symtable_leave_scope(ts);
+
+    free(func_name);
+    free(param_types);
 }
 
 /* 10. BLOCK -> INDENT STMT STMTS DEDENT */
