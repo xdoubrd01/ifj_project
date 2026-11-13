@@ -26,15 +26,15 @@ void gen_inst1(const char *inst, const char *arg1) {
 }
 
 void gen_inst2(const char *inst, const char *arg1, const char *arg2) {
-    printf("%s %s, %s\n", inst, arg1, arg2);
+    printf("%s %s %s\n", inst, arg1, arg2);
 }
 
 void gen_inst3(const char *inst, const char *arg1, const char *arg2, const char *arg3) {
-    printf("%s %s, %s, %s\n", inst, arg1, arg2, arg3);
+    printf("%s %s %s %s\n", inst, arg1, arg2, arg3);
 }
 
 void gen_inst4(const char *inst, const char *arg1, const char *arg2, const char *arg3, const char *arg4) {
-    printf("%s %s, %s, %s, %s\n", inst, arg1, arg2, arg3, arg4);
+    printf("%s %s %s %s %s\n", inst, arg1, arg2, arg3, arg4);
 }
 // AI END
 
@@ -67,13 +67,15 @@ void print_int(const int val) {
 }
 // AI END
 
+// -----   built-in functions       -----
+
 void print_string(const char *str) {
     printf("string@");
     if (str != NULL) {
         for (const char *p = str; *p != '\0'; p++) {
             unsigned char c = (unsigned char)*p;
             if (c <= 32 || c == 35 || c == 92) {
-                printf("\\0%d", (unsigned char)*p);
+                printf("\\%03d", (unsigned char)*p);
             } else {
                 putchar(*p);
             }
@@ -82,7 +84,7 @@ void print_string(const char *str) {
     printf("\n");
 }
 
-
+// -----    expr_tree process functions     -----
 
 void process_expr_leaf(ExprNode *node) {
     switch (node->kind)
@@ -95,18 +97,22 @@ void process_expr_leaf(ExprNode *node) {
     case EXPR_DOUBLE_LIT:
         printf("PUSHS ");
         print_double(node->u.d_val);
+        break;
 
     case EXPR_STRING_LIT:
         printf("PUSHS ");
         print_string(node->u.s_val);
+        break;
 
     case EXPR_UNIT_LIT:
         printf("PUSHS ");
         print_nil();
+        break;
 
     case EXPR_VAR:
         printf("PUSHS ");
         printf(node->u.var.id);
+        break;
 
     // case EXPR_BINARY:
         // call post_order()?
