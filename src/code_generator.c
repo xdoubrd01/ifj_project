@@ -84,21 +84,21 @@ void print_string(const char *str) {
 
 
 
-void process_expr_leaf(ExprNode node) {
-    switch (node.kind)
+void process_expr_leaf(ExprNode *node) {
+    switch (node->kind)
     {
     case EXPR_INT_LIT:
         printf("PUSHS ");
-        print_int(node.u.i_val);
+        print_int(node->u.i_val);
         break;
     
     case EXPR_DOUBLE_LIT:
         printf("PUSHS ");
-        print_double(node.u.d_val);
+        print_double(node->u.d_val);
 
     case EXPR_STRING_LIT:
         printf("PUSHS ");
-        print_string(node.u.s_val);
+        print_string(node->u.s_val);
 
     case EXPR_UNIT_LIT:
         printf("PUSHS ");
@@ -106,7 +106,7 @@ void process_expr_leaf(ExprNode node) {
 
     case EXPR_VAR:
         printf("PUSHS ");
-        printf(node.u.var.id);
+        printf(node->u.var.id);
 
     // case EXPR_BINARY:
         // call post_order()?
@@ -121,4 +121,19 @@ void process_expr_leaf(ExprNode node) {
     default:
         break;
     }
+}
+
+void expr_tree_post_order(ExprNode *node) {
+    if (node->kind == EXPR_BINARY) {
+        ExprNode *left = node->u.bin.left;
+        if (left) {
+            expr_tree_post_order(left);
+        }
+        ExprNode *right = node->u.bin.right;
+        if (right) {
+            expr_tree_post_order(right);
+        }
+        process_expr_leaf(node);
+    }
+    
 }
