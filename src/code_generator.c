@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 
-// functions to generate IFJ26code instructions
+// -----    functions to generate IFJ26code instructions    -----
 
 // prompt:
 // write functions in c to generate instructions on stdout.
@@ -36,3 +36,46 @@ void gen_inst4(const char *inst, const char *arg1, const char *arg2, const char 
 }
 // AI END
 
+
+// -----    constant data formatting functions      -----
+
+// prompt:
+// write fuknction to convert C float to this format:
+// float@0x1.2666666666666p
+// use %a format specifier for printf function
+
+// AI START
+void print_float(const float val) {
+    printf("float@%a\n", val);
+}
+
+// prompt:
+// do the same for those formats
+// bool@true, nil@nil, int@-5
+void print_bool(const bool val) {
+    printf("bool@%s\n", val ? "true" : "false");
+}
+
+void print_nil(void) {
+    printf("nil@nil\n");
+}
+
+void print_int(const long long int val) {
+    printf("int@%lld\n", val);
+}
+// AI END
+
+void print_string(const char *str) {
+    printf("string@");
+    if (str != NULL) {
+        for (const char *p = str; *p != '\0'; p++) {
+            unsigned char c = (unsigned char)*p;
+            if (c <= 32 || c == 35 || c == 92) {
+                printf("\\0%d", (unsigned char)*p);
+            } else {
+                putchar(*p);
+            }
+        }
+    }
+    printf("\n");
+}
