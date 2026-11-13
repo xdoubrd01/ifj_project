@@ -49,8 +49,54 @@ const char* token_type_to_string(TokenType type) {
     }
 }
 
+/*
+ * AI-generated code (ChatGPT).
+ * Prompt: "napis pomocnou funkci v jazyce C, ktera prekopiruje
+ * obsah stdin do docasneho souboru pomoci tmpfile(), aby bylo mozne
+ * vstup opakovane cist pri dvoupruchodove analy ze. Osetri take chyby
+ * cteni, zapisu a alokace souboru."
+ */
+static FILE *prepare_input(void) {
+    FILE *temp = tmpfile();
+
+    if (temp == NULL) {
+        return NULL;
+    }
+
+    int c;
+
+    while ((c = fgetc(stdin)) != EOF) {
+        if (fputc(c, temp) == EOF) {
+            fclose(temp);
+            return NULL;
+        }
+    }
+
+    if (ferror(stdin) || fflush(temp) == EOF) {
+        fclose(temp);
+        return NULL;
+    }
+
+    rewind(temp);
+
+    if (ferror(temp)) {
+        fclose(temp);
+        return NULL;
+    }
+
+    return temp;
+}
+
 int main() {
-    scanner_init(stdin);
+    FILE *source = prepare_input();
+
+    if (source == NULL) {
+        fprintf(stderr, "Internal error: cannot prepare input\n");
+        return 99;
+    }
+
+    scanner_init(source);
+
     Token token;
     int result;
 
@@ -85,5 +131,6 @@ int main() {
 
     // Korektní ukončení a smazání globálního bufferu uvnitř skeneru
     scanner_free();
+    fclose(source);
     return result;
 }
