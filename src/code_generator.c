@@ -67,8 +67,6 @@ void print_int(const int val) {
 }
 // AI END
 
-// -----   built-in functions       -----
-
 void print_string(const char *str) {
     printf("string@");
     if (str != NULL) {
@@ -83,6 +81,23 @@ void print_string(const char *str) {
     }
     printf("\n");
 }
+
+
+// -----   built-in functions       -----
+void builtin_printf() {
+    gen_inst0("TYPES");
+    gen_inst1("PUSHS", "string@nil");
+    gen_inst1("JUMPIFNEQS", "printNotNil");
+
+    gen_inst1("WRITE", "string@()");
+    gen_inst0("RETURN");
+
+    gen_inst1("LABEL", "printNotNil");
+    gen_inst1("WRITE", "");
+    gen_inst0("RETURN");
+}
+
+
 
 // -----    expr_tree process functions     -----
 
