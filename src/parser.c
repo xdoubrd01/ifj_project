@@ -587,11 +587,19 @@ static data_type parse_opt_type(void) {
     }
 }
 
-
 static ExprNode *parse_expression_wrapper(void) {
     ExprNode *expr = NULL;
+    int result;
 
-    int result = parse_expression(ts, NULL, &tok, &expr);
+    if (has_lookahead == true) {
+        result = parse_expression(ts, &tok, &lookahead, &expr);
+
+        tok = lookahead;
+        has_lookahead = false;
+    }
+    else {
+        result = parse_expression(ts, NULL, &tok, &expr);
+    }
 
     if (result != 0) {
         exit(result);
