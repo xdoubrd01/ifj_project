@@ -63,7 +63,7 @@ void print_nil(void) {
 }
 
 void print_int(const int val) {
-    printf("int@%d\n", val);
+    printf("int@%lld\n", val);
 }
 // AI END
 
@@ -103,6 +103,7 @@ void gen_builtin_print(void) {
 
     gen_inst1("LABEL", "$$print_not_nil");
     gen_inst1("WRITE", "LF@%val");
+    gen_inst1("PUSHS", "nil@nil");
     gen_inst0("POPFRAME");
     gen_inst0("RETURN");
 }
@@ -291,6 +292,23 @@ void gen_builtin_substr(void) {
 // AI END
 
 // zvysne built-in funkcie (strLength, chr, readLine, toInt) sa mapuju priamo na instrukcie IFJ26code
+
+void code_gen_init(void) {
+    gen_inst0(".IFJcode26");
+
+    gen_inst1("DEFVAR", "GF@%tmp1");
+    gen_inst1("DEFVAR", "GF@%tmp2");
+    gen_inst1("DEFVAR", "GF@%tmp3");
+
+    gen_inst1("JUMP", "$main");
+
+    gen_builtin_print();
+    gen_builtin_read_int();
+    gen_builtin_read_double();
+    gen_builtin_to_str();
+    gen_builtin_ord();
+    gen_builtin_substr();
+}
 
 
 
