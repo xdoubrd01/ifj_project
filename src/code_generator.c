@@ -84,18 +84,213 @@ void print_string(const char *str) {
 
 
 // -----   built-in functions       -----
-void builtin_printf() {
-    gen_inst0("TYPES");
-    gen_inst1("PUSHS", "string@nil");
-    gen_inst1("JUMPIFNEQS", "printNotNil");
+//AI-ASSISTED START
+void gen_builtin_print(void) {
+    gen_inst1("LABEL", "$$print");
+    gen_inst0("CREATEFRAME");
+    gen_inst0("PUSHFRAME");
+
+    gen_inst1("DEFVAR", "LF@%val");
+    gen_inst1("POPS", "LF@%val");
+
+    gen_inst1("DEFVAR", "LF@%type");
+    gen_inst2("TYPE", "LF@%type", "LF@%val");
+    gen_inst3("JUMPIFNEQ", "$$print_not_nil", "LF@%type", "string@nil");
 
     gen_inst1("WRITE", "string@()");
+    gen_inst0("POPFRAME");
     gen_inst0("RETURN");
 
-    gen_inst1("LABEL", "printNotNil");
-    gen_inst1("WRITE", "");
+    gen_inst1("LABEL", "$$print_not_nil");
+    gen_inst1("WRITE", "LF@%val");
+    gen_inst0("POPFRAME");
     gen_inst0("RETURN");
 }
+
+void gen_builtin_read_int(void) {
+    gen_inst1("LABEL", "$$read_int");
+    gen_inst0("CREATEFRAME");
+    gen_inst0("PUSHFRAME");
+
+    gen_inst1("DEFVAR", "LF@%val");
+    gen_inst2("READ", "LF@%val", "int");
+    
+    gen_inst3("JUMPIFNEQ", "$$read_int_ok", "LF@%val", "nil@nil");
+    gen_inst2("MOVE", "LF@%val", "int@0");
+
+    gen_inst1("LABEL", "$$read_int_ok");
+    gen_inst1("PUSHS", "LF@%val");
+    gen_inst0("POPFRAME");
+    gen_inst0("RETURN");
+}
+//AI-ASSISTED END
+
+// prompt: generate C function emitting IFJcode26 subroutine for built-in readDouble()
+// AI START
+void gen_builtin_read_double(void) {
+    gen_inst1("LABEL", "$$read_double");
+    gen_inst0("CREATEFRAME");
+    gen_inst0("PUSHFRAME");
+    gen_inst1("DEFVAR", "LF@%res");
+    gen_inst2("READ", "LF@%res", "float");
+    gen_inst3("JUMPIFNEQ", "$$read_double_ok", "LF@%res", "nil@nil");
+    gen_inst2("MOVE", "LF@%res", "float@0x0p+0");
+    gen_inst1("LABEL", "$$read_double_ok");
+    gen_inst1("PUSHS", "LF@%res");
+    gen_inst0("POPFRAME");
+    gen_inst0("RETURN");
+}
+// AI END
+
+// prompt: generate C function emitting IFJcode26 subroutine for built-in toStr(value)
+// AI START
+void gen_builtin_to_str(void) {
+    gen_inst1("LABEL", "$$to_str");
+    gen_inst0("CREATEFRAME");
+    gen_inst0("PUSHFRAME");
+    gen_inst1("DEFVAR", "LF@%val");
+    gen_inst1("DEFVAR", "LF@%type");
+    gen_inst1("DEFVAR", "LF@%res");
+    gen_inst1("POPS", "LF@%val");
+
+    gen_inst2("TYPE", "LF@%type", "LF@%val");
+    gen_inst3("JUMPIFEQ", "$$to_str_int", "LF@%type", "string@int");
+    gen_inst3("JUMPIFEQ", "$$to_str_float", "LF@%type", "string@float");
+    gen_inst3("JUMPIFEQ", "$$to_str_unit", "LF@%type", "string@nil");
+    gen_inst3("JUMPIFEQ", "$$to_str_bool", "LF@%type", "string@bool");
+
+    // string
+    gen_inst2("MOVE", "LF@%res", "LF@%val");
+    gen_inst1("JUMP", "$$to_str_end");
+
+    gen_inst1("LABEL", "$$to_str_int");
+    gen_inst2("INT2STR", "LF@%res", "LF@%val");
+    gen_inst1("JUMP", "$$to_str_end");
+
+    gen_inst1("LABEL", "$$to_str_float");
+    gen_inst2("FLOAT2STR", "LF@%res", "LF@%val");
+    gen_inst1("JUMP", "$$to_str_end");
+
+    gen_inst1("LABEL", "$$to_str_unit");
+    gen_inst2("MOVE", "LF@%res", "string@()");
+    gen_inst1("JUMP", "$$to_str_end");
+
+    // pre rozsirenie BOOLTHEN
+    gen_inst1("LABEL", "$$to_str_bool");
+    gen_inst3("JUMPIFEQ", "$$to_str_bool_true", "LF@%val", "bool@true");
+    gen_inst2("MOVE", "LF@%res", "string@false");
+    gen_inst1("JUMP", "$$to_str_end");
+    gen_inst1("LABEL", "$$to_str_bool_true");
+    gen_inst2("MOVE", "LF@%res", "string@true");
+
+    gen_inst1("LABEL", "$$to_str_end");
+    gen_inst1("PUSHS", "LF@%res");
+    gen_inst0("POPFRAME");
+    gen_inst0("RETURN");
+}
+// AI END
+
+// prompt: generate C function emitting IFJcode26 subroutine for built-in ord(value, index)
+// AI START
+void gen_builtin_ord(void) {
+    gen_inst1("LABEL", "$$ord");
+    gen_inst0("CREATEFRAME");
+    gen_inst0("PUSHFRAME");
+    gen_inst1("DEFVAR", "LF@%str");
+    gen_inst1("DEFVAR", "LF@%idx");
+    gen_inst1("DEFVAR", "LF@%len");
+    gen_inst1("DEFVAR", "LF@%cond");
+    gen_inst1("DEFVAR", "LF@%res");
+
+    // argumenty boli vlozene v poradi: str, idx -> vyberame opacne
+    gen_inst1("POPS", "LF@%idx");
+    gen_inst1("POPS", "LF@%str");
+
+    // kontrola index < 0
+    gen_inst3("LT", "LF@%cond", "LF@%idx", "int@0");
+    gen_inst3("JUMPIFEQ", "$$ord_invalid", "LF@%cond", "bool@true");
+
+    // kontrola index >= len (pokryva aj prazdny retazec, kde len == 0)
+    gen_inst2("STRLEN", "LF@%len", "LF@%str");
+    gen_inst3("LT", "LF@%cond", "LF@%idx", "LF@%len");
+    gen_inst3("JUMPIFNEQ", "$$ord_invalid", "LF@%cond", "bool@true");
+
+    // validny index
+    gen_inst3("STRI2INT", "LF@%res", "LF@%str", "LF@%idx");
+    gen_inst1("JUMP", "$$ord_end");
+
+    gen_inst1("LABEL", "$$ord_invalid");
+    gen_inst2("MOVE", "LF@%res", "int@-1");
+
+    gen_inst1("LABEL", "$$ord_end");
+    gen_inst1("PUSHS", "LF@%res");
+    gen_inst0("POPFRAME");
+    gen_inst0("RETURN");
+}
+// AI END
+
+// prompt: generate C function emitting IFJcode26 subroutine for built-in substr(value, start, end)
+// AI START
+void gen_builtin_substr(void) {
+    gen_inst1("LABEL", "$$substr");
+    gen_inst0("CREATEFRAME");
+    gen_inst0("PUSHFRAME");
+    gen_inst1("DEFVAR", "LF@%str");
+    gen_inst1("DEFVAR", "LF@%start");
+    gen_inst1("DEFVAR", "LF@%end");
+    gen_inst1("DEFVAR", "LF@%len");
+    gen_inst1("DEFVAR", "LF@%cond");
+    gen_inst1("DEFVAR", "LF@%res");
+    gen_inst1("DEFVAR", "LF@%char");
+
+    // argumenty vlozene v poradi: str, start, end
+    gen_inst1("POPS", "LF@%end");
+    gen_inst1("POPS", "LF@%start");
+    gen_inst1("POPS", "LF@%str");
+
+    gen_inst2("STRLEN", "LF@%len", "LF@%str");
+
+    // 1. start < 0 -> error 40
+    gen_inst3("LT", "LF@%cond", "LF@%start", "int@0");
+    gen_inst3("JUMPIFEQ", "$$substr_err", "LF@%cond", "bool@true");
+
+    // 2. end < 0 -> error 40
+    gen_inst3("LT", "LF@%cond", "LF@%end", "int@0");
+    gen_inst3("JUMPIFEQ", "$$substr_err", "LF@%cond", "bool@true");
+
+    // 3. start > end -> error 40
+    gen_inst3("GT", "LF@%cond", "LF@%start", "LF@%end");
+    gen_inst3("JUMPIFEQ", "$$substr_err", "LF@%cond", "bool@true");
+
+    // 4. start >= len (t.j. nie je start < len) -> error 40
+    gen_inst3("LT", "LF@%cond", "LF@%start", "LF@%len");
+    gen_inst3("JUMPIFNEQ", "$$substr_err", "LF@%cond", "bool@true");
+
+    // 5. end > len -> error 40
+    gen_inst3("GT", "LF@%cond", "LF@%end", "LF@%len");
+    gen_inst3("JUMPIFEQ", "$$substr_err", "LF@%cond", "bool@true");
+
+    // cyklus od start po end (vynimajuc end)
+    gen_inst2("MOVE", "LF@%res", "string@");
+    gen_inst1("LABEL", "$$substr_loop");
+    gen_inst3("JUMPIFEQ", "$$substr_end", "LF@%start", "LF@%end");
+
+    gen_inst3("GETCHAR", "LF@%char", "LF@%str", "LF@%start");
+    gen_inst3("CONCAT", "LF@%res", "LF@%res", "LF@%char");
+    gen_inst3("ADD", "LF@%start", "LF@%start", "int@1");
+    gen_inst1("JUMP", "$$substr_loop");
+
+    gen_inst1("LABEL", "$$substr_err");
+    gen_inst1("EXIT", "int@40");
+
+    gen_inst1("LABEL", "$$substr_end");
+    gen_inst1("PUSHS", "LF@%res");
+    gen_inst0("POPFRAME");
+    gen_inst0("RETURN");
+}
+// AI END
+
+// zvysne built-in funkcie (strLength, chr, readLine, toInt) sa mapuju priamo na instrukcie IFJ26code
 
 
 
