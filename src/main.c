@@ -1,7 +1,7 @@
 #include "scanner.h"
 #include <stdio.h>
 #include <stdlib.h> // Přidáno pro použití free()
-
+#include "parser.h"
 // Pomocná funkce pro převod typu tokenu na čitelný text
 const char* token_type_to_string(TokenType type) {
     switch (type) {
@@ -49,41 +49,54 @@ const char* token_type_to_string(TokenType type) {
     }
 }
 
-int main() {
-    scanner_init(stdin);
-    Token token;
-    int result;
+/*
+ * AI-generated code (ChatGPT).
+ * Prompt: "napis pomocnou funkci v jazyce C, ktera prekopiruje
+ * obsah stdin do docasneho souboru pomoci tmpfile(), aby bylo mozne
+ * vstup opakovane cist pri dvoupruchodove analy ze. Osetri take chyby
+ * cteni, zapisu a alokace souboru."
+ */
+static FILE *prepare_input(void) {
+    FILE *temp = tmpfile();
 
-    while (true) {
-        result = get_next_token(&token);
+    if (temp == NULL) {
+        return NULL;
+    }
 
-        if (result != 0) {
-            printf("CHYBA: Lexikální analyzátor vrátil chybový kód %d\n", result);
-            break;
-        }
+    int c;
 
-        printf("Typ: %s", token_type_to_string(token.type));
-
-        // Vypíšeme atribut pro identifikátory a literály a hned uvolníme
-        if (token.type == TOKEN_IDENTIFIER || token.type == TOKEN_STRING_LITERAL) {
-            printf(" | Hodnota: \"%s\"", token.attribute.s_val);
-            // Uvolníme dynamicky alokovanou paměť vrácenou skenerem
-            free(token.attribute.s_val);
-            token.attribute.s_val = NULL; // Bezpečnostní nulování ukazatele
-        } else if (token.type == TOKEN_INT_LITERAL) {
-            printf(" | Hodnota: %d", token.attribute.i_val);
-        } else if (token.type == TOKEN_DOUBLE_LITERAL) {
-            printf(" | Hodnota: %g", token.attribute.d_val);
-        }
-
-        printf("\n");
-
-        if (token.type == TOKEN_EOF) {
-            break;
+    while ((c = fgetc(stdin)) != EOF) {
+        if (fputc(c, temp) == EOF) {
+            fclose(temp);
+            return NULL;
         }
     }
 
-    // Korektní ukončení a smazání globálního bufferu uvnitř skeneru
-    scanner_free();
-    return result;
+    if (ferror(stdin) || fflush(temp) == EOF) {
+        fclose(temp);
+        return NULL;
+    }
+
+    rewind(temp);
+
+    if (ferror(temp)) {
+        fclose(temp);
+        return NULL;
+    }
+
+    return temp;
+}
+
+int main() {
+    FILE *source = prepare_input();
+
+    if (source == NULL) {
+        fprintf(stderr, "Internal error: cannot prepare input\n");
+        return 99;
+    }
+
+    parse(source);
+
+    fclose(source);
+    return 0;
 }
