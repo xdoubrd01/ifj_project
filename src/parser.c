@@ -5,8 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include "symtable.h"
-#include "../parser_semantics/exp_parser.h"
-#include "../parser_semantics/semantic.h"
+#include "exp_parser.h"
+#include "semantic.h"
 
 static Token tok; // current token
 static Token lookahead;
@@ -323,6 +323,7 @@ static void parse_function(ParserRound round) {
     }
 
     else{
+        gen_func_start(func_name);
         parse_function_body();
     }
 

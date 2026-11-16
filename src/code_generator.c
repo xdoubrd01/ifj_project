@@ -291,7 +291,9 @@ void gen_builtin_substr(void) {
 }
 // AI END
 
-// zvysne built-in funkcie (strLength, chr, readLine, toInt) sa mapuju priamo na instrukcie IFJ26code
+// other built-in functions (strLength, chr, readLine, toInt) are translated directly to IFJ26code instructions
+
+// -----   IFJ26code header generation      -----
 
 void code_gen_init(void) {
     gen_inst0(".IFJcode26");
@@ -308,6 +310,14 @@ void code_gen_init(void) {
     gen_builtin_to_str();
     gen_builtin_ord();
     gen_builtin_substr();
+}
+
+// -----    function generation     -----
+
+void gen_func_start(char *func_name) {
+    printf("LABEL $%s\n", func_name);
+    gen_inst1("DEFVAR", "LF@%retval");
+    gen_inst2("MOVE", "LF@%retval", "nil@nil");
 }
 
 
