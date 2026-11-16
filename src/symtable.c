@@ -1,4 +1,10 @@
 /**
+ *@authors Denis Doubrava xdoubrd01
+ *         Eliáš Oharek   xohare00
+ * Tvorba komentářů byla za pomoci umělé inteligence: překlad, formátování a lepší formulace vět
+ */
+
+/**
  * @file symtable.c
  * @brief Scoped symbol table built on the public hash table API.
  *
