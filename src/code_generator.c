@@ -9,11 +9,12 @@
 
 typedef struct {
     int cnt;       // celkový počet doteraz videných ifov (1, 2, 3...)
-    int if_stack[256];    // zásobník ID aktuálne vnorených ifov (príp. dynamické pole)
-    int if_stack_top;     // index vrcholu zásobníka (-1 = prázdny)
-} IfCounter;
+    int stack[256];    // zásobník ID aktuálne vnorených ifov (príp. dynamické pole)
+    int stack_top;     // index vrcholu zásobníka (-1 = prázdny)
+} LabelCounter;
 
-IfCounter if_counter;
+LabelCounter if_counter;
+LabelCounter while_counter;
 
 
 // -----    functions to generate IFJ26code instructions    -----
@@ -306,7 +307,7 @@ void gen_builtin_substr(void) {
 
 void code_gen_init(void) {
     if_counter.cnt = 0;
-    if_counter.if_stack_top = 0;
+    if_counter.stack_top = 0;
 
     gen_inst0(".IFJcode26");
 
@@ -387,8 +388,8 @@ void code_gen_init(void) {
 // AI-ASSISTED START
 void gen_if_start(ExprNode *expr) {
     int current_id = if_counter.cnt++;
-    if_counter.if_stack[if_counter.if_stack_top] = current_id;
-    if_counter.if_stack_top++;
+    if_counter.stack[if_counter.stack_top] = current_id;
+    if_counter.stack_top++;
 
     expr_tree_post_order(expr);
     printf("PUSHS bool@false\n");
@@ -396,18 +397,22 @@ void gen_if_start(ExprNode *expr) {
 }
 
 void gen_if_else(void) {
-    int current_id = if_counter.if_stack[if_counter.if_stack_top - 1];
+    int current_id = if_counter.stack[if_counter.stack_top - 1];
 
     printf("JUMP $if_skip_%d\n", current_id);
     printf("LABEL $else_%d\n", current_id);
 }
 
 void gen_if_end(void) {
-    int current_id = if_counter.if_stack[--if_counter.if_stack_top];
+    int current_id = if_counter.stack[--if_counter.stack_top];
 
     printf("LABEL $if_skip_%d\n", current_id);
 }
 // AI-ASSISTED END
+
+// -----    WHILE LOOP                      -----
+
+
 
 
 // -----    expr_tree process functions     -----
