@@ -670,11 +670,12 @@ static void parse_stmt(void) {
 
     else if(tok.type == TOKEN_KW_WHILE){
         advance();
-        parse_expression_wrapper();
+        ExprNode *expr = parse_expression_wrapper();    //free() may be needed?
         expect(TOKEN_KW_DO);
         expect(TOKEN_EOL);
+        gen_while_start(expr);
         parse_block();
-
+        gen_while_end();
     }
 
     else if(tok.type == TOKEN_KW_RETURN){

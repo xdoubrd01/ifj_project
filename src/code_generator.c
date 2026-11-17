@@ -414,17 +414,24 @@ void gen_if_end(void) {
 
 // -----    WHILE LOOP                      -----
 
-// !!! GENERATE VARIABLES BEFORE LABEL (waiting for parser and symtable adjustment)
 void gen_while_start(ExprNode *expr) {
     int current_id = while_counter.cnt++;
     while_counter.stack[while_counter.stack_top] = current_id;
     while_counter.stack_top++;
 
+    // TODO: GENERATE VARIABLES BEFORE LABEL (waiting for parser and symtable adjustment)
     printf("LABEL $while_start_%d\n", current_id);
 
     expr_tree_post_order(expr);
     printf("PUSHS bool@false\n");
     printf("JUMPIFEQS $while_end_%d\n", current_id);
+}
+
+void gen_while_end(void) {
+    int current_id = while_counter.stack[--while_counter.stack_top];
+
+    printf("JUMPI $while_start_%d\n", current_id);
+    printf("LABEL $while_end_%d\n", current_id);
 }
 
 
