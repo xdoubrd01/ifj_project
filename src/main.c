@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200809L
+#include <stdint.h>
 #include "scanner.h"
 #include <stdio.h>
 #include <stdlib.h> // Přidáno pro použití free()
@@ -51,44 +53,64 @@ const char* token_type_to_string(TokenType type) {
 
 /*
  * AI-generated code (ChatGPT).
- * Prompt: "napis pomocnou funkci v jazyce C, ktera prekopiruje
- * obsah stdin do docasneho souboru pomoci tmpfile(), aby bylo mozne
- * vstup opakovane cist pri dvoupruchodove analy ze. Osetri take chyby
- * cteni, zapisu a alokace souboru."
+ * Prompt: "nahrad pomocnou funkci prepare_input(), ktera pouziva
+ * tmpfile() resenim s dynamickym polem a fmemopen().
+ * vstup se nacita ze stdin, musi podporovat dva pruchody
+ * parseru spravne osetrovat chyby a uvolnneni pameti."
  */
-static FILE *prepare_input(void) {
-    FILE *temp = tmpfile();
+static FILE *prepare_input(char **buffer_out) {
+    size_t capacity = 4096;
+    size_t length = 0;
 
-    if (temp == NULL) {
+    *buffer_out = NULL;
+
+    char *buffer = malloc(capacity);
+    if (buffer == NULL) {
         return NULL;
     }
 
     int c;
 
     while ((c = fgetc(stdin)) != EOF) {
-        if (fputc(c, temp) == EOF) {
-            fclose(temp);
-            return NULL;
+        if (length == capacity) {
+            if (capacity > SIZE_MAX / 2) {
+                free(buffer);
+                return NULL;
+            }
+
+            capacity *= 2;
+
+            char *tmp = realloc(buffer, capacity);
+            if (tmp == NULL) {
+                free(buffer);
+                return NULL;
+            }
+
+            buffer = tmp;
         }
+
+        buffer[length++] = (char)c;
     }
 
-    if (ferror(stdin) || fflush(temp) == EOF) {
-        fclose(temp);
+    if (ferror(stdin)) {
+        free(buffer);
         return NULL;
     }
 
-    rewind(temp);
+    FILE *source = fmemopen(buffer, length, "r");
 
-    if (ferror(temp)) {
-        fclose(temp);
+    if (source == NULL) {
+        free(buffer);
         return NULL;
     }
 
-    return temp;
+    *buffer_out = buffer;
+    return source;
 }
 
-int main() {
-    FILE *source = prepare_input();
+int main(void) {
+    char *buffer = NULL;
+    FILE *source = prepare_input(&buffer);
 
     if (source == NULL) {
         fprintf(stderr, "Internal error: cannot prepare input\n");
@@ -98,5 +120,7 @@ int main() {
     parse(source);
 
     fclose(source);
+    free(buffer);
+
     return 0;
 }
