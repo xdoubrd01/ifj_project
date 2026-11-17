@@ -393,7 +393,7 @@ void gen_if_start(ExprNode *expr) {
     if_counter.stack[if_counter.stack_top] = current_id;
     if_counter.stack_top++;
 
-    expr_tree_post_order(expr);
+    process_expr_node(expr);
     printf("PUSHS bool@false\n");
     printf("JUMPIFEQS $else_%d\n", current_id);
 }
@@ -422,7 +422,7 @@ void gen_while_start(ExprNode *expr) {
     // TODO: GENERATE VARIABLES BEFORE LABEL (waiting for parser and symtable adjustment)
     printf("LABEL $while_start_%d\n", current_id);
 
-    expr_tree_post_order(expr);
+    process_expr_node(expr);
     printf("PUSHS bool@false\n");
     printf("JUMPIFEQS $while_end_%d\n", current_id);
 }
@@ -438,9 +438,19 @@ void gen_while_end(void) {
 
 // -----    expr_tree process functions     -----
 
-void process_expr_leaf(ExprNode *node) {
-    switch (node->kind)
-    {
+void process_expr_node(ExprNode *node) {
+    if (node->kind == EXPR_BINARY) {
+        ExprNode *left = node->u.bin.left;
+        if (left) {
+            process_expr_node(left);
+        }
+        ExprNode *right = node->u.bin.right;
+        if (right) {
+            process_expr_node(right);
+        }
+    }
+
+    switch (node->kind) {
     case EXPR_INT_LIT:
         printf("PUSHS ");
         print_int(node->u.i_val);
@@ -465,32 +475,23 @@ void process_expr_leaf(ExprNode *node) {
         printf("PUSHS LF@%s\n", node->u.var.id);
         break;
 
-    // case EXPR_BINARY:
-        // call post_order()?
-
-    // case EXPR_NEG:
+    case EXPR_NEG:
+        process_expr_node(node->u.operand);
+        if (node->type == type_int) {
+            gen_inst1("PUSHS", "int@-1");
+        } else {
+            gen_inst1("PUSHS", "float@-0x1p+0");
+        }
+        gen_inst0("MULS");
+        break;
         // analyse node.u.type, proccess negation of data type (if int -> reverse operand, bool...)
 
-    // case EXPR_INT2FLOAT:
-        // extract value of node.u.s_val, convert to string
-        // if node.u.var, then gen .inst. INT2FLOAT
+    case EXPR_INT2FLOAT:
+        process_expr_node(node->u.operand);
+        gen_inst0("INT2FLOATS");
+        break;
 
     default:
         break;
     }
-}
-
-void expr_tree_post_order(ExprNode *node) {
-    if (node->kind == EXPR_BINARY) {
-        ExprNode *left = node->u.bin.left;
-        if (left) {
-            expr_tree_post_order(left);
-        }
-        ExprNode *right = node->u.bin.right;
-        if (right) {
-            expr_tree_post_order(right);
-        }
-        process_expr_leaf(node);
-    }
-    
 }
