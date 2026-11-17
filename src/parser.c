@@ -7,6 +7,7 @@
 #include "symtable.h"
 #include "exp_parser.h"
 #include "semantic.h"
+#include "code_generator.c"
 
 static Token tok; // current token
 static Token lookahead;
@@ -323,7 +324,7 @@ static void parse_function(ParserRound round) {
     }
 
     else{
-        gen_func_start(func_name);
+        gen_func_start(ts, func_name);
         parse_function_body();
     }
 
@@ -683,7 +684,8 @@ static void parse_stmt(void) {
 
     else if(tok.type == TOKEN_KW_IF){
         advance();
-        parse_expression_wrapper();
+        ExprNode *expr = parse_expression_wrapper();
+        gen_if_start(expr);
         expect(TOKEN_KW_THEN);
         expect(TOKEN_EOL);
         parse_block();

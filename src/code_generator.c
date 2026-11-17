@@ -384,11 +384,15 @@ void code_gen_init(void) {
 
 // -----    IF/ELSE/WHILE ...               -----
 
-void gen_if_start(void) {
+void gen_if_start(ExprNode *expr) {
     if_counter.if_stack[if_counter.if_stack_top] = if_counter.cnt;
-    if_counter.if_stack_top++;
     if_counter.cnt++;
-    
+
+    expr_tree_post_order(expr);
+    printf("PUSHS bool@false\n");
+    printf("JUMPIFEQS $else_%s", if_counter.if_stack[if_counter.if_stack_top]);
+
+    if_counter.if_stack_top++;
 }
 
 
