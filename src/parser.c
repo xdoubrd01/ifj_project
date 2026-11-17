@@ -684,14 +684,16 @@ static void parse_stmt(void) {
 
     else if(tok.type == TOKEN_KW_IF){
         advance();
-        ExprNode *expr = parse_expression_wrapper();
-        gen_if_start(expr);
+        ExprNode *expr = parse_expression_wrapper();    //free() may be needed?
         expect(TOKEN_KW_THEN);
         expect(TOKEN_EOL);
+        gen_if_start(expr);
         parse_block();
         expect(TOKEN_KW_ELSE);
         expect(TOKEN_EOL);
+        gen_if_else();
         parse_block();
+        gen_if_end();
     }
 
     else if(tok.type == TOKEN_IDENTIFIER){
