@@ -7,6 +7,15 @@
 #include "symtable.h"
 #include "expr_tree.h"
 
+typedef struct {
+    int cnt;       // celkový počet doteraz videných ifov (1, 2, 3...)
+    int if_stack[256];    // zásobník ID aktuálne vnorených ifov (príp. dynamické pole)
+    int if_stack_top;     // index vrcholu zásobníka (-1 = prázdny)
+} IfCounter;
+
+IfCounter if_counter;
+
+
 // -----    functions to generate IFJ26code instructions    -----
 
 // prompt:
@@ -296,6 +305,9 @@ void gen_builtin_substr(void) {
 // -----   IFJ26code header generation      -----
 
 void code_gen_init(void) {
+    if_counter.cnt = 0;
+    if_counter.if_stack_top = 0;
+
     gen_inst0(".IFJcode26");
 
     gen_inst1("DEFVAR", "GF@%tmp1");
@@ -369,6 +381,16 @@ void code_gen_init(void) {
 //     printf("RETURN\n");
 // }
 // AI-ASSISTED END
+
+// -----    IF/ELSE/WHILE ...               -----
+
+void gen_if_start(void) {
+    if_counter.if_stack[if_counter.if_stack_top] = if_counter.cnt;
+    if_counter.if_stack_top++;
+    if_counter.cnt++;
+    
+}
+
 
 
 // -----    expr_tree process functions     -----
