@@ -314,12 +314,61 @@ void code_gen_init(void) {
 
 // -----    function generation     -----
 
-void gen_func_start(char *func_name) {
-    printf("LABEL $%s\n", func_name);
-    gen_inst1("DEFVAR", "LF@%retval");
-    gen_inst2("MOVE", "LF@%retval", "nil@nil");
-}
+// void gen_func_start(SymTable *table, char *func_name) {
+//     printf("LABEL $%s\n", func_name);
+//     gen_inst1("DEFVAR", "LF@%retval");
+//     gen_inst2("MOVE", "LF@%retval", "nil@nil");
 
+//     symbol_data *func_data = symtable_search_func(table, func_name);
+//     for (size_t i = 0; i < func_data->data.func.param_count ;i++) {
+//         /* code */
+//     }
+    
+// }
+
+// // AI-ASSISTED START
+// void gen_func_return(char *func_name, ExprNode *ret_expr, data_type func_ret_type) {
+//     if (ret_expr != NULL) {
+//         // 1. Vždy vyhodnotíme výraz (aj keď je návratový typ Unit, kvôli vedľajším efektom)
+//         gen_expr_tree(ret_expr);
+
+//         // Ak funkcia vracia Double a výraz bol Int, prevedieme ho
+//         if (func_ret_type == type_double && ret_expr->kind == EXPR_INT_LIT && ret_expr->kind != EXPR_INT2FLOAT) {
+//             printf("INT2FLOATS\n");
+//         }
+//         printf("POPS LF@%%retval\n");
+//     }
+//     // Nepodmienený skok na spoločný epilóg funkcie, aby prebehol POPFRAME
+//     printf("JUMP $%s$end\n", func_name);
+// }
+
+// void gen_func_implicit_end(FuncBodyEndKind end_kind, data_type last_expr_type, data_type func_ret_type) {
+//     if (end_kind == FUNC_END_EXPR_ON_STACK) {
+//         if (func_ret_type == type_unit) {
+//             // Pravidlo 4: výraz/volanie na konci Unit funkcie sa vyhodnotí, ale výsledok sa zahodí
+//             printf("POPS GF@$tmp1\n");
+//             printf("MOVE LF@%%retval nil@nil\n");
+//         } else {
+//             // Pravidlo 2: vráti sa výsledok posledného výrazu alebo volania
+//             if (func_ret_type == type_double && last_expr_type == type_int) {
+//                 printf("INT2FLOATS\n");
+//             }
+//             printf("POPS LF@%%retval\n");
+//         }
+//     } else {
+//         // Pravidlo 2 a 3: blok skončil príkazom bez hodnoty (val/var, priradenie, while, if)
+//         printf("MOVE LF@%%retval nil@nil\n");
+//     }
+// }
+
+// void gen_func_end(char *func_name) {
+//     printf("LABEL $%s$end\n", func_name);
+//     // Presunie aktuálny LF zo zásobníka rámcov do TF (odkiaľ si volajúci vyzdvihne TF@%retval)
+//     printf("POPFRAME\n");
+//     // Návrat na inštrukciu za CALL
+//     printf("RETURN\n");
+// }
+// AI-ASSISTED END
 
 
 // -----    expr_tree process functions     -----
@@ -348,8 +397,7 @@ void process_expr_leaf(ExprNode *node) {
         break;
 
     case EXPR_VAR:
-        printf("PUSHS ");
-        printf(node->u.var.id);
+        printf("PUSHS LF@%s\n", node->u.var.id);
         break;
 
     // case EXPR_BINARY:
