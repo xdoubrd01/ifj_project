@@ -384,17 +384,30 @@ void code_gen_init(void) {
 
 // -----    IF/ELSE/WHILE ...               -----
 
+// AI-ASSISTED START
 void gen_if_start(ExprNode *expr) {
-    if_counter.if_stack[if_counter.if_stack_top] = if_counter.cnt;
-    if_counter.cnt++;
+    int current_id = if_counter.cnt++;
+    if_counter.if_stack[if_counter.if_stack_top] = current_id;
+    if_counter.if_stack_top++;
 
     expr_tree_post_order(expr);
     printf("PUSHS bool@false\n");
-    printf("JUMPIFEQS $else_%s", if_counter.if_stack[if_counter.if_stack_top]);
-
-    if_counter.if_stack_top++;
+    printf("JUMPIFEQS $else_%d\n", current_id);
 }
 
+void gen_if_else(void) {
+    int current_id = if_counter.if_stack[if_counter.if_stack_top - 1];
+
+    printf("JUMP $if_skip_%d\n", current_id);
+    printf("LABEL $else_%d\n", current_id);
+}
+
+void gen_if_end(void) {
+    int current_id = if_counter.if_stack[--if_counter.if_stack_top];
+
+    printf("LABEL $if_skip_%d\n", current_id);
+}
+// AI-ASSISTED END
 
 
 // -----    expr_tree process functions     -----
