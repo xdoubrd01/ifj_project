@@ -76,8 +76,6 @@ typedef enum {
     TOKEN_RPAREN,  // )
     TOKEN_COLON,   // :
     TOKEN_COMMA,   // ,
-    TOKEN_AT,      // @
-    TOKEN_SEMICOL, // ;
 
     // Additional punctuation and the entry-point annotation
     TOKEN_DOT,       // .
