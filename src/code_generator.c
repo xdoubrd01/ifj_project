@@ -316,9 +316,9 @@ void code_gen_init(void) {
 
     gen_inst0(".IFJcode26");
 
-    gen_inst1("DEFVAR", "GF@%tmp1");
-    gen_inst1("DEFVAR", "GF@%tmp2");
-    gen_inst1("DEFVAR", "GF@%tmp3");
+    gen_inst1("DEFVAR", "GF@%tmp_op1");
+    gen_inst1("DEFVAR", "GF@%tmp_op2");
+    gen_inst1("DEFVAR", "GF@%tmp_res");
 
     gen_inst1("JUMP", "$main");
 
