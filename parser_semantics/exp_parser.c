@@ -20,10 +20,9 @@
  * prompt: "Add a unique id of the variable (for shadowing) and update my part."
  * prompt: "Add more accurate comments/description of functions, leave
  *          already existing comments."
- * prompt: "Check the comments after my changes, fix the markers
- *          (AI - UPDATED: description, no START / END)."
+ * prompt: "Check the comments after my changes, fix the markers"
  * AI - UPDATED: removed top() (unused) and print_ifj_string() (IFJcode string
- *               output belongs to the code generator now)
+ *               output belongs to the code generator now) 
  */
 #include "exp_parser.h"
 #include "../src/scanner.h"
