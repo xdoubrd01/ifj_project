@@ -16,6 +16,9 @@ typedef struct {
 LabelCounter if_counter;
 LabelCounter while_counter;
 
+static char *current_func_name = NULL;
+static data_type current_func_ret_type = type_unknown;
+
 
 // -----    functions to generate IFJ26code instructions    -----
 
@@ -329,7 +332,10 @@ void code_gen_init(void) {
 
 // -----    function generation     -----
 
-void gen_func_start(SymTable *table, char *func_name) {
+void gen_func_start(SymTable *table, char *func_name, data_type ret_type) {
+    current_func_name = func_name;
+    current_func_ret_type = ret_type;
+
     printf("LABEL $%s\n", func_name);
     gen_inst1("DEFVAR", "LF@%retval");
     gen_inst2("MOVE", "LF@%retval", "nil@nil");
@@ -343,31 +349,34 @@ void gen_func_start(SymTable *table, char *func_name) {
     }
 }
 
-// // AI-ASSISTED START
-// void gen_func_return(char *func_name, ExprNode *ret_expr, data_type func_ret_type) {
-//     if (ret_expr != NULL) {
-//         // 1. Vždy vyhodnotíme výraz (aj keď je návratový typ Unit, kvôli vedľajším efektom)
-//         gen_expr_tree(ret_expr);
+// AI-ASSISTED START
+void gen_func_return(ExprNode *ret_expr) {
+    if (ret_expr != NULL) {
+        // 1. Vždy vyhodnotíme výraz (aj keď je návratový typ Unit, kvôli vedľajším efektom)
+        gen_expr_tree(ret_expr);
 
-//         // Ak funkcia vracia Double a výraz bol Int, prevedieme ho
-//         if (func_ret_type == type_double && ret_expr->kind == EXPR_INT_LIT && ret_expr->kind != EXPR_INT2FLOAT) {
-//             printf("INT2FLOATS\n");
-//         }
-//         printf("POPS LF@%%retval\n");
-//     }
-//     // Nepodmienený skok na spoločný epilóg funkcie, aby prebehol POPFRAME
-//     printf("JUMP $%s$end\n", func_name);
-// }
+        // Ak funkcia vracia Double a výraz bol Int, prevedieme ho
+        if (current_func_ret_type == type_double && ret_expr->kind == EXPR_INT_LIT && ret_expr->kind != EXPR_INT2FLOAT) {
+            printf("INT2FLOATS\n");
+        }
+        printf("POPS LF@%%retval\n");
+    }
+    if (current_func_ret_type == type_unit) {
+        printf("MOVE LF@%%retval nil@nil\n");
+    }
+    // Nepodmienený skok na spoločný epilóg funkcie, aby prebehol POPFRAME
+    printf("JUMP $%s$end\n", current_func_name);
+}
 
-// void gen_func_implicit_end(FuncBodyEndKind end_kind, data_type last_expr_type, data_type func_ret_type) {
+// void gen_func_implicit_end(FuncBodyEndKind end_kind, data_type last_expr_type) {
 //     if (end_kind == FUNC_END_EXPR_ON_STACK) {
-//         if (func_ret_type == type_unit) {
+//         if (current_func_ret_type == type_unit) {
 //             // Pravidlo 4: výraz/volanie na konci Unit funkcie sa vyhodnotí, ale výsledok sa zahodí
 //             printf("POPS GF@$tmp1\n");
 //             printf("MOVE LF@%%retval nil@nil\n");
 //         } else {
 //             // Pravidlo 2: vráti sa výsledok posledného výrazu alebo volania
-//             if (func_ret_type == type_double && last_expr_type == type_int) {
+//             if (current_func_ret_type == type_double && last_expr_type == type_int) {
 //                 printf("INT2FLOATS\n");
 //             }
 //             printf("POPS LF@%%retval\n");
@@ -378,13 +387,13 @@ void gen_func_start(SymTable *table, char *func_name) {
 //     }
 // }
 
-// void gen_func_end(char *func_name) {
-//     printf("LABEL $%s$end\n", func_name);
-//     // Presunie aktuálny LF zo zásobníka rámcov do TF (odkiaľ si volajúci vyzdvihne TF@%retval)
-//     printf("POPFRAME\n");
-//     // Návrat na inštrukciu za CALL
-//     printf("RETURN\n");
-// }
+void gen_func_end(void) {
+    printf("LABEL $%s$end\n", current_func_name);
+    // Presunie aktuálny LF zo zásobníka rámcov do TF (odkiaľ si volajúci vyzdvihne TF@%retval)
+    printf("POPFRAME\n");
+    // Návrat na inštrukciu za CALL
+    printf("RETURN\n");
+}
 // AI-ASSISTED END
 
 // -----    IF/ELSE/WHILE ...               -----
