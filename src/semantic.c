@@ -1,8 +1,28 @@
+/*
+ * semantic.c - semantic checks (variables, types of expressions)
+ *
+ * AI (Claude Code, Claude Opus 5.5) used to adapt my functions to the
+ * current symtable.h and to work with the expression tree; functions written
+ * by AI have "prompt:" above them, my functions changed by AI are marked
+ * "AI - UPDATED"
+ * prompt: "Adapt semantic.c to the current symtable.h on origin/development,
+ *          don't change the overall logic of the functions."
+ * prompt: (answers to questions of AI) "Error codes should be in the
+ *          assignment PDFs, verify them. Type unknown treat as an error
+ *          unless the assignment says otherwise (verify). Returning codes
+ *          instead of exit() is fine."
+ * prompt: "Add a unique id of the variable (for shadowing) and update my part."
+ * prompt: "Add more accurate comments/description of functions, leave
+ *          already existing comments."
+ */
 #include "semantic.h"
 #include <stdio.h>
 #include <stdlib.h>
 
-// AI START
+// prompt: "Int -> Double is the only implicit conversion, the generator needs
+//          it explicitly in the tree (INT2FLOATS), add it where both
+//          operands must be numbers."
+// AI: helpers for sem_binary_op / sem_unary_op / sem_coerce_expr
 // true for Int or Double
 static bool is_numeric(data_type type) {
   return type == type_int || type == type_double;
@@ -22,9 +42,13 @@ static int to_double(ExprNode **node) {
   *node = conv;            // caller now holds the conversion node
   return 0;
 }
-// AI END
 
-// AI - UPDATED START
+// prompt: "Adapt sem_declare_variable to SymTable: redefinition only in the
+//          same block (error 4), type can be omitted and is then taken from
+//          the initializer, explicit type must accept it (Int -> Double)."
+// AI - UPDATED: hashtable* -> SymTable*, exit() -> return code, type inference
+//               and compatibility check added, out_id for the generator
+// Declares a new variable in the current scope (val / var)
 int sem_declare_variable(SymTable *st, const char *var_name,
                          data_type declared_type, data_type value_type,
                          bool is_mutable, unsigned *out_id) {
@@ -63,6 +87,11 @@ int sem_declare_variable(SymTable *st, const char *var_name,
   return 0;
 }
 
+// prompt: "Adapt sem_get_variable_type to SymTable, the variable must be
+//          visible (3), unknown type is an error (6)."
+// AI - UPDATED: symtable_search -> symtable_search_var (shadowing),
+//               type_unknown -> error 6, returns code, type via out_type
+// Returns the type of a visible variable used in an expression
 int sem_get_variable_type(SymTable *st, const char *var_name,
                           data_type *out_type, unsigned *out_id) {
   // nearest visible variable or parameter (respects shadowing)
@@ -85,9 +114,11 @@ int sem_get_variable_type(SymTable *st, const char *var_name,
   }
   return 0;
 }
-// AI - UPDATED END
 
-// AI START
+// prompt: "sem_check_assignment is declared in semantic.h but not implemented,
+//          implement it: variable must exist (3), val and parameters cannot
+//          be assigned (7), type of the variable must accept the value (6)."
+// Checks assignment 'name = value' to an existing variable
 int sem_check_assignment(SymTable *st, const char *var_name,
                          data_type value_type, unsigned *out_id) {
   symbol_data *found = symtable_search_var(st, var_name);
@@ -113,6 +144,9 @@ int sem_check_assignment(SymTable *st, const char *var_name,
   return 0;
 }
 
+// prompt: "When assigning Int expression to a Double variable the conversion
+//          must be in the tree too, add a function for the parser."
+// Converts the whole expression to the target type (only Int -> Double)
 int sem_coerce_expr(ExprNode **expr, data_type target) {
   if ((*expr)->type == target) {
     return 0; // nothing to do
@@ -124,6 +158,9 @@ int sem_coerce_expr(ExprNode **expr, data_type target) {
   return 6;
 }
 
+// prompt: "Condition of if / while has to be a relational expression, add
+//          a check the parser can call (Boolean exists only in conditions)."
+// Checks that the condition of if / while is a relation (type_bool)
 int sem_check_condition(const ExprNode *cond) {
   if (cond->type != type_bool) {
     // if / while needs a relational expression
@@ -133,6 +170,8 @@ int sem_check_condition(const ExprNode *cond) {
   return 0;
 }
 
+// prompt: "Check of unary + / - operand, only numbers are allowed (6)."
+// Checks the operand of unary + / -
 int sem_unary_op(const ExprNode *operand) {
   if (!is_numeric(operand->type)) {
     // unary + / - only for numbers
@@ -141,9 +180,14 @@ int sem_unary_op(const ExprNode *operand) {
   }
   return 0;
 }
-// AI END
 
-// AI - UPDATED START
+// prompt: "Adapt sem_get_binary_op_result to the tree: insert the Int -> Double
+//          conversion into operands and decide DIV / IDIV and ADD / CONCAT
+//          here, so the generator gets the final operator."
+// AI - UPDATED: was sem_get_binary_op_result (returned only the type), now it
+//               may wrap operands into EXPR_INT2FLOAT and returns ExprOp;
+//               == / != on Boolean, unknown and any is an error 6
+// Checks a binary operation and resolves its operator and result type
 int sem_binary_op(TokenType op, ExprNode **left, ExprNode **right,
                   ExprOp *out_op, data_type *out_type) {
   data_type left_type = (*left)->type;
@@ -237,4 +281,3 @@ int sem_binary_op(TokenType op, ExprNode **left, ExprNode **right,
           "Internal Error (99): Unknown operator in semantic analysis.\n");
   return 99;
 }
-// AI - UPDATED END

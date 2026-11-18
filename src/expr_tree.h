@@ -1,4 +1,21 @@
-// AI START
+/*
+ * expr_tree.h - typed expression tree, interface between the expression
+ *               parser (exp_parser.c), semantics (semantic.c) and the code
+ *               generator
+ *
+ * AI: whole file written with AI (Claude Code, Claude Opus 5.5) after
+ *     discussing the interface, checked and adjusted by me
+ * prompt: "exp_parser.c prints IFJcode with printf, I want it to build an
+ *          expression tree with types for my colleague doing the code
+ *          generator. Before writing any code, propose the interface first."
+ * prompt: "The interface is fine, you can create separate expr_tree files.
+ *          Keep it as basic and simple as possible, but functional."
+ * prompt: "Variable in the tree has only a name, so the generator cannot tell
+ *          shadowed variables apart. Add a unique id to symtable and pass it
+ *          into the tree."
+ * prompt: "Add more accurate comments/description of functions, leave
+ *          already existing comments."
+ */
 #ifndef EXPR_TREE_H
 #define EXPR_TREE_H
 
@@ -52,10 +69,10 @@ typedef struct ExprNode {
   ExprKind kind;  // what the node is
   data_type type; // result type of this node
   union {
-    int i_val;    // EXPR_INT_LIT
-    double d_val; // EXPR_DOUBLE_LIT
-    char *s_val;  // EXPR_STRING_LIT (owned by node)
-    struct {
+    int i_val;     // EXPR_INT_LIT
+    double d_val;  // EXPR_DOUBLE_LIT
+    char *s_val;   // EXPR_STRING_LIT (owned by node)
+    struct {       // AI - UPDATED: was char *var_name, id added for shadowing
       char *name;  // variable name (owned by node)
       unsigned id; // unique id from symtable (data.var.id)
     } var;         // EXPR_VAR
@@ -78,4 +95,3 @@ void expr_free(ExprNode *node);
 void expr_dump(const ExprNode *node, FILE *out);
 
 #endif // EXPR_TREE_H
-// AI END

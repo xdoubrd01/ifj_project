@@ -1,3 +1,18 @@
+/*
+ * semantic.h - semantic checks used by the parser and the expression parser
+ *
+ * AI (Claude Code, Claude Opus 5.5) used to adapt the functions to the
+ * current symtable.h, parts changed by AI are marked "AI - UPDATED"
+ * prompt: "Adapt semantic.c to the current symtable.h on origin/development
+ *          (SymTable, scopes), keep the logic of my functions."
+ * prompt: (answers to questions of AI) "Error codes should be in the
+ *          assignment PDFs, verify them. Type unknown treat as an error
+ *          unless the assignment says otherwise (verify). Returning codes
+ *          instead of exit() is fine."
+ * prompt: "Add a unique id of the variable (for shadowing) and update my part."
+ * prompt: "Add more accurate comments/description of functions, leave
+ *          already existing comments."
+ */
 #ifndef SEMANTIC_H
 #define SEMANTIC_H
 
@@ -6,7 +21,8 @@
 #include "expr_tree.h" // AI - UPDATED: nodes are needed for implicit conversions
 #include <stdbool.h>
 
-// AI - UPDATED START
+// AI - UPDATED START: hashtable* -> SymTable*, void + exit() -> return code,
+//                    new functions for assignment, conversion and condition
 /*
  * All functions return 0 on success or an error code from the specification:
  *   3 = undefined variable, 4 = redefinition, 6 = type error,
