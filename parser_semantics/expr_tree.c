@@ -1,8 +1,20 @@
-// AI START
+/*
+ * expr_tree.c - helper functions for the expression tree (see expr_tree.h)
+ *
+ * AI: whole file written with AI (Claude Code, Claude Opus 5.5), function
+ *     descriptions added by me
+ * prompt: "You can create the expr_tree files, keep it as basic and simple as
+ *          possible, but functional."
+ * prompt: "Add more accurate comments/description of functions, leave
+ *          already existing comments."
+ */
 #include "expr_tree.h"
 #include <stdlib.h>
 
-// Creates a new expression node of the given kind and type, with all fields zeroed
+// prompt: "Function that allocates one node of the tree, on allocation failure
+//          the caller should report error 99."
+// Creates a new expression node of the given kind and type, with all fields
+// zeroed
 ExprNode *expr_new(ExprKind kind, data_type type) {
   ExprNode *node = calloc(1, sizeof(ExprNode)); // zeroed -> pointers are NULL
   if (node == NULL) {
@@ -13,6 +25,8 @@ ExprNode *expr_new(ExprKind kind, data_type type) {
   return node;
 }
 
+// prompt: "Function that frees the whole tree, the nodes own the strings
+//          taken over from tokens, so free them too."
 // Frees the whole tree recursively, including owned strings and identifiers
 void expr_free(ExprNode *node) {
   if (node == NULL) {
@@ -39,6 +53,9 @@ void expr_free(ExprNode *node) {
   free(node);
 }
 
+// prompt: "Debug print of the tree, so I can check the result of the parser
+//          on test inputs without the generator."
+// AI: type_name / op_name are helpers of expr_dump only
 // type name for debug output
 static const char *type_name(data_type type) {
   switch (type) {
@@ -67,6 +84,7 @@ static const char *op_name(ExprOp op) {
 }
 
 // Dumps the tree in Prefix
+// AI: e.g. "i + d" -> (+ double (int2float (var i$0 int)) (var d$1 double))
 void expr_dump(const ExprNode *node, FILE *out) {
   if (node == NULL) {
     fprintf(out, "(null)");
@@ -108,4 +126,3 @@ void expr_dump(const ExprNode *node, FILE *out) {
     break;
   }
 }
-// AI END
