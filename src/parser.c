@@ -346,8 +346,8 @@ static void parse_function(ParserRound round) {
         }
 
         if (!symtable_set_func_param_names(ts,func_name,param_count,(const char *const *)param_names)) {
-        exit(99);
-}
+            exit(99);
+        }
     }
     expect(TOKEN_ASSIGN);
 
@@ -356,8 +356,9 @@ static void parse_function(ParserRound round) {
     }
 
     else{
-        gen_func_start(ts, func_name);
+        gen_func_start(ts, func_name, ret_type);
         parse_function_body();
+        gen_func_end();
     }
 
     symtable_leave_scope(ts);
@@ -646,13 +647,17 @@ static ExprNode *parse_expression_wrapper(void) {
 }
 
 static void parse_opt_return_tail(void){
-if(tok.type == TOKEN_EOL || tok.type == TOKEN_SEMICOL){
-    parse_stmt_tail();
-}
+    if(tok.type == TOKEN_EOL || tok.type == TOKEN_SEMICOL){
+        parse_stmt_tail();
+        gen_func_return(NULL);
+        // return bez expr
+    }
 
-else if(tok.type == TOKEN_IDENTIFIER || is_non_id_expression(tok.type) == 1){
-    parse_call_or_exp();
-    parse_stmt_tail();
+    else if(tok.type == TOKEN_IDENTIFIER || is_non_id_expression(tok.type) == 1){
+        parse_call_or_exp();
+        parse_stmt_tail();
+        // TODO: implementovat gen_func_return
+        //return s expr
     }
 }
 

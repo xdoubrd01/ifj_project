@@ -385,7 +385,14 @@ void gen_func_return(ExprNode *ret_expr) {
 // }
 
 void gen_func_end(void) {
+    gen_func_return(NULL);
     printf("LABEL $%s$end\n", current_func_name);
+
+    if (current_func_ret_type == type_unit) {
+        printf("MOVE LF@%%retval nil@nil\n");
+    }
+
+    printf("POPS LF@%%retval\n");
     // Presunie aktuálny LF zo zásobníka rámcov do TF (odkiaľ si volajúci vyzdvihne TF@%retval)
     printf("POPFRAME\n");
     // Návrat na inštrukciu za CALL
