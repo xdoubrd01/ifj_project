@@ -3,7 +3,7 @@
  *               parser (exp_parser.c), semantics (semantic.c) and the code
  *               generator
  *
- * AI: whole file written with AI (Claude Code, Claude Opus 5.5) after
+ * AI: file written with AI (Claude Code, Claude Opus 5.5) after
  *     discussing the interface, checked and adjusted by me
  * prompt: "exp_parser.c prints IFJcode with printf, I want it to build an
  *          expression tree with types for my colleague doing the code

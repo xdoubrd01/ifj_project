@@ -21,9 +21,8 @@
 #include "symtable.h"
 #include "expr_tree.h" // AI - UPDATED: result is an expression tree
 
-// AI - UPDATED: was int parse_expression(hashtable *ts, Token
-// *next_token,
-//                    Token *next_token) (duplicate parameter, did not compile)
+// AI - UPDATED: was int parse_expression(hashtable *ts, Token *next_token,
+//               Token *next_token) (duplicate parameter, did not compile)
 /*
  * Parses an expression using the precedence parser and builds a typed tree.
  *

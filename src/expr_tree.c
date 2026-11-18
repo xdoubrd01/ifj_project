@@ -1,7 +1,7 @@
 /*
  * expr_tree.c - helper functions for the expression tree (see expr_tree.h)
  *
- * AI: whole file written with AI (Claude Code, Claude Opus 5.5), after
+ * AI: file written with AI (Claude Code, Claude Opus 5.5), after
  *     discussing the interface, checked and adjusted by me, function
  *     descriptions added by me
  * prompt: "You can create the expr_tree files, keep it as basic and simple as

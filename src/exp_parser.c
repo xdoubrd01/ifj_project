@@ -11,16 +11,18 @@
  *          src/symtable.h). Rewrite exp_parser.c so that instead of printf it
  *          builds an expression tree with types for my colleague doing the
  *          code generator. Don't change the precedence table, if it needs
- *          a change warn me. Propose the interface
- *          first."
+ *          a change warn me. Propose the interface first."
  * prompt: "Keep the code as basic and simple as possible, but functional.
  *          Don't change the overall logic of the program, comment the lines
  *          briefly in the same style as the file."
+ * prompt: "Check if this part is OK to hand over to the generator colleague,
+ *          offer updates for parts that might contain problematic values."
  * prompt: "Add a unique id of the variable (for shadowing) and update my part."
  * prompt: "Add more accurate comments/description of functions, leave
  *          already existing comments."
+ * prompt: "Check the comments after my changes, fix the markers"
  * AI - UPDATED: removed top() (unused) and print_ifj_string() (IFJcode string
- *               output belongs to the code generator now)
+ *               output belongs to the code generator now) 
  */
 #include "exp_parser.h"
 #include "scanner.h"
@@ -195,8 +197,8 @@ static void insert_shift_marker(void) {
   stack_top++;
 }
 
-// prompt: (rewrite of exp_parser.c, see header) without it
-//          tokens and subtrees left on the stack leaked on every error
+// prompt: (rewrite of exp_parser.c, see header) - stack has to be freed on
+//          error, tokens and subtrees left on the stack leaked
 // Frees heap data owned by one stack item
 static void free_item(Stack_Item *item) {
   if (item->type == SYM_NON_TERMINAL) {
@@ -426,7 +428,7 @@ int parse_expression(SymTable *st, Token *pending, Token *tok, // AI - UPDATED
 
       // E -> id / value
       if (pop_count == 1 && popped_items[0].type == SYM_TERMINAL) {
-        // AI - UPDATED START: leaf node instead of printf PUSHS
+        // AI - UPDATED: leaf node instead of printf PUSHS
         rc = make_term_node(st, &popped_items[0], &new_item.node);
         if (rc != 0) {
           goto error;

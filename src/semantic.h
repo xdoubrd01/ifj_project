@@ -22,7 +22,7 @@
 #include <stdbool.h>
 
 // AI - UPDATED: hashtable* -> SymTable*, void + exit() -> return code,
-//                    new functions for assignment, conversion and condition
+//               new functions for assignment, conversion and condition
 /*
  * All functions return 0 on success or an error code from the specification:
  *   3 = undefined variable, 4 = redefinition, 6 = type error,
