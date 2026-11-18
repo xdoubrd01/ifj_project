@@ -10,6 +10,7 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 /** @brief Default capacity for each underlying hash table. */
 #define DEFAULT_SYMTABLE_CAPACITY 32U
@@ -50,7 +51,24 @@ static size_t normalized_capacity(size_t capacity) {
 }
 
 /**
- * @brief Releases one symbol record and its owned parameter array.
+ * @brief Releases an owned parameter-name array and its initialized strings.
+ * @param names Array to release; NULL is accepted.
+ * @param count Number of initialized entries to release.
+ */
+static void free_param_names(char **names, size_t count) {
+    if (names == NULL) {
+        return;
+    }
+
+    for (size_t i = 0; i < count; ++i) {
+        free(names[i]);
+    }
+
+    free(names);
+}
+
+/**
+ * @brief Releases one symbol record, its parameter types, and name copies.
  *
  * @param data Symbol record; NULL is accepted.
  */
@@ -62,9 +80,10 @@ static void free_symbol(void *data) {
         return;
     }
 
-    /* Function records own an additional array of parameter types. */
+    /* Function records own parameter types and any assigned name copies. */
     if (symbol->type == sym_func) {
         free(symbol->data.func.params);
+        free_param_names(symbol->data.func.param_names, symbol->data.func.param_count);
     }
 
     /*
@@ -386,6 +405,7 @@ bool symtable_insert_func(SymTable *table, const char *key, data_type ret_type, 
     symbol->data.func.ret_type    = ret_type;
     symbol->data.func.param_count = param_count;
     symbol->data.func.params      = NULL;
+    symbol->data.func.param_names = NULL;
 
     if (param_count > 0) {
         /* Guard the byte-count multiplication before allocating the array. */
@@ -417,6 +437,61 @@ bool symtable_insert_func(SymTable *table, const char *key, data_type ret_type, 
     }
 
     /* The table owns both the record and its optional parameter-type array. */
+    return true;
+}
+
+bool symtable_set_func_param_names(SymTable *table, const char *key, size_t param_count,
+                                   const char *const *param_names) {
+    symbol_data *symbol = symtable_search_func(table, key);
+
+    if (symbol == NULL || symbol->data.func.param_count != param_count ||
+        (param_count > 0 && param_names == NULL)) {
+        return false;
+    }
+
+    // Zero-parameter functions need no name storage.
+    if (param_count == 0) {
+        return true;
+    }
+
+    if (param_count > SIZE_MAX / sizeof(char *)) {
+        return false;
+    }
+
+    // Validate all supplied entries before allocating any replacement storage.
+    for (size_t i = 0; i < param_count; ++i) {
+        if (param_names[i] == NULL || param_names[i][0] == '\0') {
+            return false;
+        }
+    }
+
+    char **copies = malloc(param_count * sizeof(*copies));
+    if (copies == NULL) {
+        return false;
+    }
+
+    for (size_t i = 0; i < param_count; ++i) {
+        size_t length = strlen(param_names[i]);
+
+        if (length == SIZE_MAX) {
+            free_param_names(copies, i);
+            return false;
+        }
+
+        copies[i] = malloc(length + 1);
+        if (copies[i] == NULL) {
+            // Only entries before i have been initialized successfully.
+            free_param_names(copies, i);
+            return false;
+        }
+
+        memcpy(copies[i], param_names[i], length + 1);
+    }
+
+    // Publish only the complete replacement; inputs may alias the old names.
+    free_param_names(symbol->data.func.param_names, param_count);
+    symbol->data.func.param_names = copies;
+
     return true;
 }
 

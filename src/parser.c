@@ -21,7 +21,7 @@ typedef enum {
 
 
 static void advance(void) {
-    // Uvolnění aktuálního tokenu
+    
     if (tok.type == TOKEN_IDENTIFIER ||
         tok.type == TOKEN_STRING_LITERAL) {
         free(tok.attribute.s_val);
@@ -188,7 +188,19 @@ static void append_param(data_type **types, size_t *count, data_type type) {
     (*count)++;
 }
 
-static data_type parse_parameters_start(){
+static void append_param_name(char ***names, size_t count, char *name) {
+    char **tmp = realloc(*names, count * sizeof(char *));
+
+    if (tmp == NULL) {
+        free(name);
+        exit(99);
+    }
+
+    *names = tmp;
+    (*names)[count - 1] = name;
+}
+
+static data_type parse_parameters_start(char **out_name){
 
     if (tok.type != TOKEN_IDENTIFIER) {
     syntax_error();
@@ -210,26 +222,41 @@ static data_type parse_parameters_start(){
         free(param_name);
         exit(4);
     }
-    free(param_name);
+    *out_name = param_name;
     return param_type;
 }
 
-static void parse_parameters_tail(data_type **types, size_t *count){
-    if(tok.type == TOKEN_COMMA){
+static void parse_parameters_tail(
+    data_type **types,
+    char ***names,
+    size_t *count
+) {
+    if (tok.type == TOKEN_COMMA) {
         advance();
-        data_type param_type = parse_parameters_start();
-        append_param(types, count, param_type);
-        parse_parameters_tail(types, count); 
 
+        char *name = NULL;
+        data_type type = parse_parameters_start(&name);
+
+        append_param(types, count, type);
+        append_param_name(names, *count, name);
+
+        parse_parameters_tail(types, names, count);
     }
 }
 
-static void parse_parameters_list(data_type **types, size_t *count){
+static void parse_parameters_list(
+    data_type **types,
+    char ***names,
+    size_t *count
+) {
+    if (tok.type == TOKEN_IDENTIFIER) {
+        char *name = NULL;
+        data_type type = parse_parameters_start(&name);
 
-    if(tok.type == TOKEN_IDENTIFIER){
-        data_type param_type = parse_parameters_start();
-        append_param(types, count, param_type);
-        parse_parameters_tail(types, count);
+        append_param(types, count, type);
+        append_param_name(names, *count, name);
+
+        parse_parameters_tail(types, names, count);
     }
 }
 
@@ -290,9 +317,10 @@ static void parse_function(ParserRound round) {
     if (symtable_enter_scope(ts) == false) exit(99);
 
     data_type *param_types = NULL;
+    char **param_names = NULL;
     size_t param_count = 0;
     expect(TOKEN_LPAREN);
-    parse_parameters_list(&param_types, &param_count);
+    parse_parameters_list(&param_types, &param_names, &param_count);
     expect(TOKEN_RPAREN);
     data_type ret_type = parse_opt_return_type();
 
@@ -316,6 +344,10 @@ static void parse_function(ParserRound round) {
             free(param_types);
             exit(4);
         }
+
+        if (!symtable_set_func_param_names(ts,func_name,param_count,(const char *const *)param_names)) {
+        exit(99);
+}
     }
     expect(TOKEN_ASSIGN);
 
@@ -330,8 +362,11 @@ static void parse_function(ParserRound round) {
 
     symtable_leave_scope(ts);
 
-    free(func_name);
-    free(param_types);
+    for (size_t i = 0; i < param_count; i++) {
+        free(param_names[i]);
+        }
+
+    free(param_names);
 }
 
 /* 10. BLOCK -> INDENT STMT STMTS DEDENT */
@@ -664,7 +699,7 @@ static void parse_stmt(void) {
         }
 
         free(var_name);
-            
+        expect(TOKEN_ASSIGN);    
         parse_stmt_tail();
     }
 
