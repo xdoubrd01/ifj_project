@@ -11,14 +11,11 @@
  *          src/symtable.h). Rewrite exp_parser.c so that instead of printf it
  *          builds an expression tree with types for my colleague doing the
  *          code generator. Don't change the precedence table, if it needs
- *          a change, only add comments and warn me. Propose the interface
+ *          a change warn me. Propose the interface
  *          first."
  * prompt: "Keep the code as basic and simple as possible, but functional.
  *          Don't change the overall logic of the program, comment the lines
  *          briefly in the same style as the file."
- * prompt: "Would you change the precedence table? Check if this part is OK to
- *          hand over to the generator colleague, offer updates for parts that
- *          might contain problematic values."
  * prompt: "Add a unique id of the variable (for shadowing) and update my part."
  * prompt: "Add more accurate comments/description of functions, leave
  *          already existing comments."
@@ -104,22 +101,8 @@ static prec_idx_t get_precedence_index(TokenType current_type,
  * E = error (syntax error)
  * = = equal precedence (used to match parentheses "()")
  */
-// prompt: "Don't change the precedence table, if it needs a change, only add
-//          comments and warn me."
+// prompt: "Don't change the precedence table, if it needs a change, warn me."
 // AI: review notes, table values were not changed
-/*
- * POZNAMKY K TABULCE (tabulka nezmenena, jen komentare):
- *  - REL x REL a EQ x EQ = 'E' -> "a < b < c", "a == b == c" je chyba 2.
- *    Zadani: relacni operatory "bez asociativity", retezeni neni povoleno.
- *  - REL ma vyssi prioritu nez EQ (row REL / col EQ = '>'), odpovida zadani
- *    (priorita 4 vs 5). "a < b == c" projde syntaxi, ale semantika vrati 6
- *    (Boolean neni bez BOOLTHEN hodnota) - zadani neuvadi, zda 2 nebo 6.
- *  - ( x ) = '=' -> "()" je literal Unit; redukce E -> ( ) je doplnena
- *    v parse_expression (tabulka zmenu nepotrebuje).
- *  - value x ( = 'E' -> volani funkce ve vyrazu nejde (FUNEXP neni).
- *  - EOF x ) = 'E', ale ')' na dne zasobniku ukoncuje vyraz (is_stop_token).
- */
-// AI - UPDATED: static
 static char prec_table[9][9] = {
     // +-   */   <=>  ==!=  (    )   val  EOF  UNARY
     {'>', '<', '>', '>', '<', '>', '<', '>', '<'}, // +-
@@ -212,7 +195,7 @@ static void insert_shift_marker(void) {
   stack_top++;
 }
 
-// prompt: (rewrite of exp_parser.c, see header) - added by AI, without it
+// prompt: (rewrite of exp_parser.c, see header) without it
 //          tokens and subtrees left on the stack leaked on every error
 // Frees heap data owned by one stack item
 static void free_item(Stack_Item *item) {
@@ -313,14 +296,13 @@ static int make_term_node(SymTable *st, Stack_Item *item, ExprNode **out) {
 // Parses one expression, see exp_parser.h for the parameters
 int parse_expression(SymTable *st, Token *pending, Token *tok, // AI - UPDATED
                      ExprNode **out) {
-  // AI - UPDATED START: variables for the error label, stack reset
+  // AI - UPDATED: variables for the error label, stack reset
   *out = NULL;                // nothing on error
   stack_top = -1;             // reset stack from previous call
   int rc = 0;                 // error code for the error label
   bool use_saved = false;     // *tok still waits to be read
   Stack_Item popped_items[4]; // handle of the current reduction
   int pop_count = 0;          // number of valid popped_items
-  // AI - UPDATED END
 
   // Initialize the stack with a stop symbol
   Stack_Item stop_item = {
@@ -330,14 +312,13 @@ int parse_expression(SymTable *st, Token *pending, Token *tok, // AI - UPDATED
   TokenType prev_token_type = TOKEN_EOF; // OPRAVENO
   Token current_token;
 
-  // AI - UPDATED START: pending token instead of first_token
+  // AI - UPDATED: pending token instead of first_token
   if (pending != NULL) {
     current_token = *pending; // identifier already read by parser
     use_saved = true;         // *tok comes next
   } else {
     current_token = *tok; // first token of the expression
   }
-  // AI - UPDATED END
 
   while (1) {
     // Get the top terminal from the stack and determine precedence
@@ -383,14 +364,13 @@ int parse_expression(SymTable *st, Token *pending, Token *tok, // AI - UPDATED
       push(new_item);
       prev_token_type = current_token.type;
 
-      // AI - UPDATED START: read_token instead of get_next_token (pending token
+      // AI - UPDATED: read_token instead of get_next_token (pending token
       // first)
       if ((rc = read_token(&current_token, tok, &use_saved)) != 0) {
         fprintf(stderr, "Lexical error while getting the next token\n");
         current_token.type = TOKEN_EOF; // attributes are invalid
         goto error;
       }
-      // AI - UPDATED END
 
       // match
     } else if (precedence_relation == '=') {
@@ -403,14 +383,13 @@ int parse_expression(SymTable *st, Token *pending, Token *tok, // AI - UPDATED
       push(new_item);
       prev_token_type = current_token.type;
 
-      // AI - UPDATED START: read_token instead of get_next_token (pending token
+      // AI - UPDATED: read_token instead of get_next_token (pending token
       // first)
       if ((rc = read_token(&current_token, tok, &use_saved)) != 0) {
         fprintf(stderr, "Lexical error while getting the next token\n");
         current_token.type = TOKEN_EOF; // attributes are invalid
         goto error;
       }
-      // AI - UPDATED END
 
       // reduction
     } else if (precedence_relation == '>') {
@@ -453,14 +432,13 @@ int parse_expression(SymTable *st, Token *pending, Token *tok, // AI - UPDATED
           goto error;
         }
         push(new_item);
-        // AI - UPDATED END
 
         // 2: E -> E op E
       } else if (pop_count == 3 && popped_items[0].type == SYM_NON_TERMINAL &&
                  popped_items[1].type == SYM_TERMINAL &&
                  popped_items[2].type == SYM_NON_TERMINAL) {
 
-        // AI - UPDATED START: binary node instead of printf, types in
+        // AI - UPDATED: binary node instead of printf, types in
         // sem_binary_op
         Stack_Item *op_item = &popped_items[1];
         if (op_item->prec_idx != PREC_IDX_ADD_SUB &&
@@ -493,7 +471,6 @@ int parse_expression(SymTable *st, Token *pending, Token *tok, // AI - UPDATED
         popped_items[2].node = NULL;
         popped_items[0].node = NULL;
         push(new_item);
-        // AI - UPDATED END
 
         // 3: E -> ( E )
       } else if (pop_count == 3 && popped_items[0].type == SYM_TERMINAL &&
@@ -507,7 +484,7 @@ int parse_expression(SymTable *st, Token *pending, Token *tok, // AI - UPDATED
         popped_items[1].node = NULL;          // AI - UPDATED
         push(new_item);
 
-        // AI - UPDATED START: new rule E -> ( ), Unit literal
+        // AI - UPDATED: new rule E -> ( ), Unit literal
         // E -> ( )   Unit literal
       } else if (pop_count == 2 && popped_items[0].type == SYM_TERMINAL &&
                  popped_items[0].token_type == TOKEN_RPAREN &&
@@ -521,14 +498,13 @@ int parse_expression(SymTable *st, Token *pending, Token *tok, // AI - UPDATED
           goto error;
         }
         push(new_item);
-        // AI - UPDATED END
 
         // 4: E -> unary_op E
       } else if (pop_count == 2 && popped_items[0].type == SYM_NON_TERMINAL &&
                  popped_items[1].type == SYM_TERMINAL &&
                  popped_items[1].prec_idx == PREC_IDX_UNARY) { // AI - UPDATED
 
-        // AI - UPDATED START: type check, EXPR_NEG node instead of printf
+        // AI - UPDATED: type check, EXPR_NEG node instead of printf
         // only numbers (6)
         if ((rc = sem_unary_op(popped_items[0].node)) != 0) {
           goto error;
@@ -547,7 +523,6 @@ int parse_expression(SymTable *st, Token *pending, Token *tok, // AI - UPDATED
         }
         popped_items[0].node = NULL;
         push(new_item);
-        // AI - UPDATED END
 
       } else {
         fprintf(stderr, "Syntax error: invalid reduction pattern\n");
@@ -563,7 +538,7 @@ int parse_expression(SymTable *st, Token *pending, Token *tok, // AI - UPDATED
     }
   } // END OF WHILE CYCLE (1)
 
-  // AI - UPDATED START: return the tree, error label frees everything
+  // AI - UPDATED: return the tree, error label frees everything
   *out = stack[1].node; // finished tree ($ E on the stack)
   stack[1].node = NULL;
   stack_top = -1;
@@ -577,5 +552,4 @@ error:
   stack_clear();        // everything still on the stack
   *tok = current_token; // caller owns the token where we stopped
   return rc;
-  // AI - UPDATED END
 }

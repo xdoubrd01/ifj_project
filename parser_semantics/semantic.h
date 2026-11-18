@@ -21,7 +21,7 @@
 #include "expr_tree.h" // AI - UPDATED: nodes are needed for implicit conversions
 #include <stdbool.h>
 
-// AI - UPDATED START: hashtable* -> SymTable*, void + exit() -> return code,
+// AI - UPDATED: hashtable* -> SymTable*, void + exit() -> return code,
 //                    new functions for assignment, conversion and condition
 /*
  * All functions return 0 on success or an error code from the specification:
@@ -59,6 +59,5 @@ int sem_binary_op(TokenType op, ExprNode **left, ExprNode **right,
                   ExprOp *out_op, data_type *out_type);
 // Checks operand of unary + / -
 int sem_unary_op(const ExprNode *operand);
-// AI - UPDATED END
 
 #endif // SEMANTIC_H
