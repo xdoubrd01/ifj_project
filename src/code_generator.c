@@ -359,33 +359,13 @@ void gen_func_return(ExprNode *ret_expr) {
         if (current_func_ret_type == type_double && ret_expr->kind == EXPR_INT_LIT && ret_expr->kind != EXPR_INT2FLOAT) {
             printf("INT2FLOATS\n");
         }
-        printf("POPS LF@%%retval\n");
     }
     // Nepodmienený skok na spoločný epilóg funkcie, aby prebehol POPFRAME
     printf("JUMP $%s$end\n", current_func_name);
 }
 
-// void gen_func_implicit_end(FuncBodyEndKind end_kind, data_type last_expr_type) {
-//     if (end_kind == FUNC_END_EXPR_ON_STACK) {
-//         if (current_func_ret_type == type_unit) {
-//             // Pravidlo 4: výraz/volanie na konci Unit funkcie sa vyhodnotí, ale výsledok sa zahodí
-//             printf("POPS GF@$tmp1\n");
-//             printf("MOVE LF@%%retval nil@nil\n");
-//         } else {
-//             // Pravidlo 2: vráti sa výsledok posledného výrazu alebo volania
-//             if (current_func_ret_type == type_double && last_expr_type == type_int) {
-//                 printf("INT2FLOATS\n");
-//             }
-//             printf("POPS LF@%%retval\n");
-//         }
-//     } else {
-//         // Pravidlo 2 a 3: blok skončil príkazom bez hodnoty (val/var, priradenie, while, if)
-//         printf("MOVE LF@%%retval nil@nil\n");
-//     }
-// }
-
+// TODO: pridat osetrenie pre 'return func()'
 void gen_func_end(void) {
-    gen_func_return(NULL);
     printf("LABEL $%s$end\n", current_func_name);
 
     if (current_func_ret_type == type_unit) {
@@ -393,10 +373,11 @@ void gen_func_end(void) {
     }
 
     printf("POPS LF@%%retval\n");
+    gen_inst0("CLEARS");
     // Presunie aktuálny LF zo zásobníka rámcov do TF (odkiaľ si volajúci vyzdvihne TF@%retval)
-    printf("POPFRAME\n");
+    gen_inst0("POPFRAME");
     // Návrat na inštrukciu za CALL
-    printf("RETURN\n");
+    gen_inst0("RETURN");
 }
 // AI-ASSISTED END
 
