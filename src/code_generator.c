@@ -361,9 +361,6 @@ void gen_func_return(ExprNode *ret_expr) {
         }
         printf("POPS LF@%%retval\n");
     }
-    if (current_func_ret_type == type_unit) {
-        printf("MOVE LF@%%retval nil@nil\n");
-    }
     // Nepodmienený skok na spoločný epilóg funkcie, aby prebehol POPFRAME
     printf("JUMP $%s$end\n", current_func_name);
 }
@@ -459,6 +456,59 @@ void process_expr_node(ExprNode *node) {
         if (right) {
             process_expr_node(right);
         }
+
+        // prompt:
+        // Complete logic for EXPR_BINARY
+        // AI START
+        switch (node->u.bin.op) {
+            case OP_ADD:
+                gen_inst0("ADDS");
+                break;
+            case OP_SUB:
+                gen_inst0("SUBS");
+                break;
+            case OP_MUL:
+                gen_inst0("MULS");
+                break;
+            case OP_DIV:
+                gen_inst0("DIVS");
+                break;
+            case OP_IDIV:
+                gen_inst0("IDIVS");
+                break;
+            case OP_EQ:
+                gen_inst0("EQS");
+                break;
+            case OP_NEQ:
+                gen_inst0("EQS");
+                gen_inst0("NOTS");
+                break;
+            case OP_LT:
+                gen_inst0("LTS");
+                break;
+            case OP_LEQ:
+                gen_inst0("GTS");
+                gen_inst0("NOTS");
+                break;
+            case OP_GT:
+                gen_inst0("GTS");
+                break;
+            case OP_GEQ:
+                gen_inst0("LTS");
+                gen_inst0("NOTS");
+                break;
+            case OP_CONCAT:
+                // IFJcode26 does not provide a CONCATS instruction.
+                // We must pop the operands into temporary variables (e.g., in GF), 
+                // perform CONCAT, and push the result back.
+                // (Make sure to define GF@%tmp_op1, GF@%tmp_op2, GF@%tmp_res during program initialization)
+                printf("POPS GF@%%tmp_op2\n");
+                printf("POPS GF@%%tmp_op1\n");
+                printf("CONCAT GF@%%tmp_res GF@%%tmp_op1 GF@%%tmp_op2\n");
+                printf("PUSHS GF@%%tmp_res\n");
+                break;
+        }
+        // AI END
     }
 
     switch (node->kind) {
