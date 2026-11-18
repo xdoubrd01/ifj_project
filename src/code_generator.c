@@ -329,17 +329,19 @@ void code_gen_init(void) {
 
 // -----    function generation     -----
 
-// void gen_func_start(SymTable *table, char *func_name) {
-//     printf("LABEL $%s\n", func_name);
-//     gen_inst1("DEFVAR", "LF@%retval");
-//     gen_inst2("MOVE", "LF@%retval", "nil@nil");
+void gen_func_start(SymTable *table, char *func_name) {
+    printf("LABEL $%s\n", func_name);
+    gen_inst1("DEFVAR", "LF@%retval");
+    gen_inst2("MOVE", "LF@%retval", "nil@nil");
 
-//     symbol_data *func_data = symtable_search_func(table, func_name);
-//     for (size_t i = 0; i < func_data->data.func.param_count ;i++) {
-//         /* code */
-//     }
-    
-// }
+    symbol_data *func_data = symtable_search_func(table, func_name);
+    size_t param_count = func_data->data.func.param_count;
+
+    for (size_t i = 0; i <  param_count; i++) {
+        symbol_data *var_data = symtable_search_var(table, func_data->data.func.param_names[i]);
+        gen_inst1("DEFVAR", var_data->data.var.id);
+    }
+}
 
 // // AI-ASSISTED START
 // void gen_func_return(char *func_name, ExprNode *ret_expr, data_type func_ret_type) {
