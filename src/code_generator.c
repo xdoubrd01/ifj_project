@@ -413,6 +413,11 @@ void code_gen_init(void) {
     gen_builtin_ord();
     gen_builtin_substr();
 
+    gen_builtin_strLength();
+    gen_builtin_chr();
+    gen_builtin_readLine();
+    gen_builtin_toInt();
+
     buffer_flush(code_buff);
 }
 
