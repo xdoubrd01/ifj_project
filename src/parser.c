@@ -19,7 +19,8 @@ static Token lookahead;
 static bool has_lookahead = false;
 static SymTable *ts = NULL;
 static data_type current_return_type = type_unknown;
-static bool main_found = false;
+static char *entry_function_name = NULL;
+
 
 typedef enum {
     FIRST_ROUND,
@@ -183,11 +184,15 @@ void parse(FILE *source) {
     scanner_init(source);
 
     // druhy pruchod
-    code_gen_init();
+   if (entry_function_name == NULL) {
+    exit(3);
+    }
+
+    // druhy pruchod
     advance();
-    code_gen_init();
+    code_gen_init(entry_function_name);
     parse_program(SECOND_ROUND);
-    
+        
     scanner_free();
 }
 
@@ -358,6 +363,8 @@ static void skip_function_body(void){
 // V obou pruchodech nacteme hlavicku funkce, ale registrujeme ji
 // jen v prvnim. Jeji telo se kontroluje az ve druhem.
 static void parse_function(ParserRound round) {
+    bool is_entry = (tok.type == TOKEN_AT_MAIN);
+
     parse_opt_annotation();
     expect(TOKEN_KW_DEF);
 
@@ -383,6 +390,25 @@ static void parse_function(ParserRound round) {
     expect(TOKEN_RPAREN);
 
     data_type ret_type = parse_opt_return_type();
+
+    if (round == FIRST_ROUND && is_entry) {
+    if (entry_function_name != NULL) {
+        exit(4);
+    }
+
+    if (param_count != 0) {
+        exit(5);
+    }
+
+    if (ret_type != type_unit) {
+        exit(6);
+    }
+
+    entry_function_name = strdup(func_name);
+    if (entry_function_name == NULL) {
+        exit(99);
+    }
+}
 
     if(round == FIRST_ROUND){
         /*
