@@ -1,3 +1,7 @@
+// Project:    IFJ26
+// Filename:   semantic.c
+// Author:     Jakub Grásgruber <xgrasgj00>
+
 /*
  * semantic.c - semantic checks (variables, types of expressions)
  *

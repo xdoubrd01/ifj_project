@@ -1,4 +1,10 @@
 /**
+ *@authors Denis Doubrava xdoubrd01
+ *         Eliáš Oharek   xohare00
+ * Tvorba komentářů byla za pomoci umělé inteligence: překlad, formátování a lepší formulace vět
+ */
+
+/**
  * @file hashtable.h
  * @brief Generic hash table with open addressing and string keys.
  *

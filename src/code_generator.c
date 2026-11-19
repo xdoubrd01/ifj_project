@@ -4,9 +4,11 @@
 
 #include <stdio.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include "symtable.h"
 #include "expr_tree.h"
 #include "code_buffer.h"
+#include "code_generator.h"
 
 typedef struct {
     int cnt;       // celkový počet doteraz videných ifov (1, 2, 3...)
@@ -125,7 +127,7 @@ void gen_builtin_print(void) {
 }
 
 void gen_builtin_read_int(void) {
-    gen_inst1("LABEL", "$read_int");
+    gen_inst1("LABEL", "$readInt");
     gen_inst0("CREATEFRAME");
     gen_inst0("PUSHFRAME");
 
@@ -145,7 +147,7 @@ void gen_builtin_read_int(void) {
 // prompt: generate C function emitting IFJcode26 subroutine for built-in readDouble()
 // AI START
 void gen_builtin_read_double(void) {
-    gen_inst1("LABEL", "$read_double");
+    gen_inst1("LABEL", "$readDouble");
     gen_inst0("CREATEFRAME");
     gen_inst0("PUSHFRAME");
     gen_inst1("DEFVAR", "LF@%res");
@@ -162,7 +164,7 @@ void gen_builtin_read_double(void) {
 // prompt: generate C function emitting IFJcode26 subroutine for built-in toStr(value)
 // AI START
 void gen_builtin_to_str(void) {
-    gen_inst1("LABEL", "$to_str");
+    gen_inst1("LABEL", "$toStr");
     gen_inst0("CREATEFRAME");
     gen_inst0("PUSHFRAME");
     gen_inst1("DEFVAR", "LF@%val");
@@ -249,7 +251,7 @@ void gen_builtin_ord(void) {
 // prompt: generate C function emitting IFJcode26 subroutine for built-in substr(value, start, end)
 // AI START
 void gen_builtin_substr(void) {
-    gen_inst1("LABEL", "$substr");
+    gen_inst1("LABEL", "$subStr");
     gen_inst0("CREATEFRAME");
     gen_inst0("PUSHFRAME");
     gen_inst1("DEFVAR", "LF@%str");
@@ -386,7 +388,7 @@ void gen_builtin_toInt(void) {
 // -----   IFJ26code header generation      -----
 
 void code_gen_init(void) {
-    if (!buffer_init(&code_buff)) {
+    if (!buffer_init(code_buff)) {
         fprintf(stderr, "Error allocating buffer!\n");
         exit(99);
     }
@@ -410,6 +412,11 @@ void code_gen_init(void) {
     gen_builtin_to_str();
     gen_builtin_ord();
     gen_builtin_substr();
+
+    gen_builtin_strLength();
+    gen_builtin_chr();
+    gen_builtin_readLine();
+    gen_builtin_toInt();
 
     buffer_flush(code_buff);
 }
@@ -447,7 +454,7 @@ void gen_func_start(SymTable *table, char *func_name, data_type ret_type) {
 void gen_func_return(ExprNode *ret_expr) {
     if (ret_expr != NULL) {
         // 1. Vždy vyhodnotíme výraz (aj keď je návratový typ Unit, kvôli vedľajším efektom)
-        gen_expr_tree(ret_expr);
+        process_expr_node(ret_expr);
 
         // Ak funkcia vracia Double a výraz bol Int, prevedieme ho
         if (current_func_ret_type == type_double && ret_expr->kind == EXPR_INT_LIT && ret_expr->kind != EXPR_INT2FLOAT) {
@@ -521,7 +528,7 @@ void gen_while_start(ExprNode *expr) {
 void gen_while_end(void) {
     int current_id = while_counter.stack[--while_counter.stack_top];
 
-    buffer_append_format(code_buff, "JUMPI $while_start_%d\n", current_id);
+    buffer_append_format(code_buff, "JUMP $while_start_%d\n", current_id);
     buffer_append_format(code_buff, "LABEL $while_end_%d\n", current_id);
 }
 
@@ -656,7 +663,7 @@ void gen_var_assign(SymTable *ts, char *var_name, data_type var_type, ExprNode *
     }
 
     // Uloženie výsledku zo zásobníka do premennej v LF (bez DEFVAR)
-    buffer_append_format(code_buff, "POPS LF@%u\n", var_data->data.var.id);
+    buffer_append_format(code_buff, "POPS LF@%u\n", var_id);
 }
 
 void gen_def_var(SymTable *ts, char *var_name, data_type var_type, ExprNode *node) {

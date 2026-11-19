@@ -640,7 +640,7 @@ static data_type parse_call_or_exp(ExprNode **out_expr) {
 }
 
 static void parse_stmt_tail(void){
-    if (tok.type == TOKEN_SEMICOL || tok.type == TOKEN_EOL) advance();
+    if (tok.type == TOKEN_SEMICOLON || tok.type == TOKEN_EOL) advance();
     else syntax_error();
 }
 
@@ -651,8 +651,7 @@ if(tok.type == TOKEN_ASSIGN){
     ExprNode *expr = NULL;
     data_type expr_type = parse_call_or_exp(&expr);
 
-    (void)var_name;
-    (void)expr_type;
+    gen_var_assign(ts, var_name, expr_type, expr);
 
     expr_free(expr);
     
@@ -708,7 +707,7 @@ static ExprNode *parse_expression_wrapper(void) {
 }
 
 static void parse_opt_return_tail(void){
-    if(tok.type == TOKEN_EOL || tok.type == TOKEN_SEMICOL){
+    if(tok.type == TOKEN_EOL || tok.type == TOKEN_SEMICOLON){
         gen_func_return(NULL);
         parse_stmt_tail();
         return;
@@ -770,14 +769,16 @@ static void parse_stmt(void) {
         expect(TOKEN_ASSIGN);
         ExprNode *expr = NULL;
         data_type expr_type = parse_call_or_exp(&expr);
-        expr_free(expr);
 
         int rc = sem_declare_variable(ts, var_name, var_type, expr_type, is_var, NULL);
-
+        
         if (rc != 0) {
             free(var_name);
             exit(rc);
         }
+
+        gen_def_var(ts, var_name, var_type, expr);
+        expr_free(expr);
 
         free(var_name);  
         parse_stmt_tail();

@@ -1,4 +1,10 @@
 /**
+ *@author Denis Doubrava xdoubrd01
+ * Použitý model: GPT-6.1 Sol
+ * Tvorba komentářů byla za pomoci umělé inteligence: překlad, formátování a lepší formulace vět.
+ */
+
+/**
  * @file scanner.c
  * @brief Stateful lexical analyzer for the base IFJ26 language.
  */
@@ -189,6 +195,15 @@ static int push_char(int c) {
  *
  * @return 0 on success or 99 on allocation failure or size overflow.
  */
+/**
+ * Začátek AI části
+ * Použitý model: GPT-6.1 Sol
+ * Rozsah: Nová pomocná funkce pro dynamický zásobník odsazení.
+ * Otestuj zpracování odsazení, zejména více vnořených bloků, návraty na předchozí úrovně,
+ * prázdné řádky, komentáře a pokračování uvnitř závorek. Prověř omezení pevně velkého
+ * zásobníku odsazení. Pokud omezuje zpracování platného vstupu, převeď jej na dynamicky
+ * zvětšovaný zásobník. Ošetři selhání alokace, přetečení velikostí a uvolnění paměti.
+ */
 static int reserve_indents(size_t required) {
     if (required <= indent_capacity) {
         return 0;
@@ -220,6 +235,9 @@ static int reserve_indents(size_t required) {
 
     return 0;
 }
+/**
+ * Konec AI části: reserve_indents()
+ */
 
 /**
  * @brief Emits remaining block endings before the final EOF token.
@@ -472,6 +490,15 @@ static int finish_multiline_comment(Token *token) {
  *
  * @note Continuation lines inside parentheses never create block markers.
  */
+/**
+ * Začátek AI části
+ * Použitý model: GPT-6.1 Sol
+ * Rozsah: Úpravy původní funkce pro práci s dynamickým zásobníkem.
+ * Otestuj zpracování odsazení, zejména více vnořených bloků, návraty na předchozí úrovně,
+ * prázdné řádky, komentáře a pokračování uvnitř závorek. Prověř omezení pevně velkého
+ * zásobníku odsazení. Pokud omezuje zpracování platného vstupu, převeď jej na dynamicky
+ * zvětšovaný zásobník. Ošetři selhání alokace, přetečení velikostí a uvolnění paměti.
+ */
 static int handle_line_start(Token *token) {
     size_t spaces                    = 0;
     bool   indentation_locked        = false;
@@ -674,6 +701,9 @@ static int handle_line_start(Token *token) {
 
     return -1;
 }
+/**
+ * Konec AI části: handle_line_start()
+ */
 
 /**
  * @brief Reads an ASCII name and classifies keywords.
@@ -776,6 +806,16 @@ static int finish_number_delimiter(int c) {
  * Supports fractional parts, exponents, digit separators, and the optional
  * d/D suffix on the supported Double forms.
  */
+
+/**
+ * Začátek AI části
+ * Použitý model: GPT-6.1 Sol
+ * Rozsah: Úpravy původního rozpoznávání číselných literálů.
+ * Porovnej funkci read_number() s mým návrhem DKA, specifikací jazyka a poznatky z fóra.
+ * Otestuj podtržítka mezi číslicemi, exponenty, přípony a úvodní nuly. Zápisy jako 01.5 musí být
+ * odmítnuty, zatímco 0.5, .5 a 2e001 mají být přijaty. Nalezené chyby oprav a vysvětli změny
+ * v implementaci.
+ */
 static int read_number(Token *token, int first) {
     ds_clear(&buffer);
 
@@ -787,8 +827,9 @@ static int read_number(Token *token, int first) {
     if (first == '.') {
         has_fraction = true;
 
-        if (ds_append(&buffer, '.') != 0)
+        if (ds_append(&buffer, '.') != 0) {
             return 99;
+        }
 
         int c = read_char();
 
@@ -798,37 +839,52 @@ static int read_number(Token *token, int first) {
 
         int rc = append_digit_sequence(c, &term);
 
-        if (rc != 0)
+        if (rc != 0) {
             return rc;
+        }
     } else {
-        /*
-         * Read the whole digit sequence first. The leading-zero restriction
-         * must not reject a valid Double before its dot or exponent is seen.
-         */
-        int rc = append_digit_sequence(first, &term);
+        /* A leading zero must be the only digit of the whole-number part. */
+        if (first == '0') {
+            if (ds_append(&buffer, '0') != 0) {
+                return 99;
+            }
 
-        if (rc != 0)
-            return rc;
+            term = read_char();
+
+            /* Reject additional whole-part digits, including separated ones. */
+            if (is_digit(term) || term == '_') {
+                return 1;
+            }
+        } else {
+            int rc = append_digit_sequence(first, &term);
+
+            if (rc != 0) {
+                return rc;
+            }
+        }
 
         if (term == '.') {
             has_fraction = true;
 
-            if (ds_append(&buffer, '.') != 0)
+            if (ds_append(&buffer, '.') != 0) {
                 return 99;
+            }
 
             int c = read_char();
 
+            /* A fractional part is mandatory after the decimal point. */
             if (!is_digit(c)) {
-                /* A fractional part is mandatory after the decimal point. */
                 return 1;
             }
 
             int rc = append_digit_sequence(c, &term);
 
-            if (rc != 0)
+            if (rc != 0) {
                 return rc;
+            }
         }
     }
+
 
     if (term == 'e' || term == 'E') {
         has_exponent = true;
@@ -898,6 +954,9 @@ static int read_number(Token *token, int first) {
 
     return convert_int(buffer.text, &token->attribute.i_val);
 }
+/**
+ * Konec AI části: read_number()
+ */
 
 /**
  * @brief Decodes the five supported escapes in a single-line string.
@@ -961,6 +1020,15 @@ static int read_normal_string(Token *token) {
  * A run of at least three quotes closes the literal. Its final three quotes
  * are delimiters; any preceding quotes in that run belong to the value.
  */
+/**
+ * Začátek AI části
+ * Použitý model: GPT-6.1 Sol
+ * Rozsah: Přepracování zpracování uzavírací řady uvozovek.
+ * Zkontroluj zpracování uvozovek ve víceřádkových řetězcích podle specifikace a upřesnění
+ * z fóra. Otestuj především vstupy tvořené sedmi a osmi uvozovkami za sebou, jednotlivé
+ * uvozovky uvnitř řetězce a neukončené řetězce. Oprav funkci tak, aby správně rozlišovala
+ * obsah řetězce a jeho ukončovací uvozovky.
+ */
 static int read_multiline_string(Token *token) {
     ds_clear(&buffer);
 
@@ -1007,6 +1075,9 @@ static int read_multiline_string(Token *token) {
         }
     }
 }
+/**
+ * Konec AI části: read_multiline_string()
+ */
 
 /**
  * @brief Distinguishes ordinary, empty, and triple-quoted string literals.
@@ -1071,6 +1142,16 @@ static int read_at_main(Token *token) {
  * @brief Recognizes the next token while handling layout and comments.
  *
  * @return 0 on success, 1 on lexical error, or 99 on internal failure.
+ */
+/**
+ * Začátek AI části
+ * Použitý model: GPT-6.1 Sol
+ * Rozsah: Vyčlenění původního čtení tokenů a doplnění sledování nových řádků.
+ * Zkontroluj předávání tokenů ze scanneru parseru a návratové kódy při lexikální, interní
+ * a vstupní chybě. Ověř, zda parser dostává dostatek informací pro kontrolu koncové čárky
+ * před uzavírací závorkou na dalším řádku. Podle potřeby doplň informaci o přeskočeném
+ * novém řádku a odděl samotné rozpoznávání tokenů od obsluhy veřejného rozhraní. Vysvětli
+ * také vlastnictví paměti identifikátorů a řetězců.
  */
 static int scan_next(Token *token) {
     if (source == NULL || token == NULL) {
@@ -1354,6 +1435,9 @@ static int scan_next(Token *token) {
         return 0;
     }
 }
+/**
+ * Konec AI části: scan_next()
+ */
 
 /**
  * @brief Selects a caller-owned stream and resets the scanner.
@@ -1369,6 +1453,16 @@ void scanner_init(FILE *source_file) {
  * @brief Returns one token and records skipped physical line breaks.
  *
  * @return 0 on success, 1 on lexical error, or 99 on internal/API/I/O failure.
+ */
+/**
+ * Začátek AI části
+ * Použitý model: GPT-6.1 Sol
+ * Rozsah: Nová obsluha rozhraní, chyb čtení a informace newline_before.
+ * Zkontroluj předávání tokenů ze scanneru parseru a návratové kódy při lexikální, interní
+ * a vstupní chybě. Ověř, zda parser dostává dostatek informací pro kontrolu koncové čárky
+ * před uzavírací závorkou na dalším řádku. Podle potřeby doplň informaci o přeskočeném
+ * novém řádku a odděl samotné rozpoznávání tokenů od obsluhy veřejného rozhraní. Vysvětli
+ * také vlastnictví paměti identifikátorů a řetězců.
  */
 int get_next_token(Token *token) {
     if (source == NULL || token == NULL) {
@@ -1410,6 +1504,9 @@ int get_next_token(Token *token) {
 
     return rc;
 }
+/**
+ * Konec AI části: get_next_token()
+ */
 
 /**
  * @brief Frees internal buffers and resets all scanner state.
