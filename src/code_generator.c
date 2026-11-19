@@ -523,7 +523,7 @@ void gen_while_start(ExprNode *expr) {
 void gen_while_end(void) {
     int current_id = while_counter.stack[--while_counter.stack_top];
 
-    buffer_append_format(code_buff, "JUMPI $while_start_%d\n", current_id);
+    buffer_append_format(code_buff, "JUMP $while_start_%d\n", current_id);
     buffer_append_format(code_buff, "LABEL $while_end_%d\n", current_id);
 }
 
