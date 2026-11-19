@@ -111,4 +111,18 @@ void buffer_free(CodeBuffer *buf) {
         buf->capacity = 0;
     }
 }
+
+void buffer_clear(CodeBuffer *buf) {
+    if (buf != NULL && buf->data != NULL) {
+        buf->length = 0;
+        buf->data[0] = '\0';
+    }
+}
+
+void buffer_flush(CodeBuffer *buf) {
+    if (buf != NULL && buf->data != NULL && buf->length > 0) {
+        fwrite(buf->data, sizeof(char), buf->length, stdout);
+        buffer_clear(buf);
+    }
+}
 // AI END

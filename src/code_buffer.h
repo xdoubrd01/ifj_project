@@ -28,4 +28,10 @@ bool buffer_append_format(CodeBuffer *buf, const char *format, ...);
 // Uvoľní pamäť buffera
 void buffer_free(CodeBuffer *buf);
 
+// Vymaže obsah buffera bez uvoľnenia alokovanej pamäte (pre opätovné použitie)
+void buffer_clear(CodeBuffer *buf);
+
+// Vypíše obsah buffera na stdout a hneď ho vymaže
+void buffer_flush(CodeBuffer *buf);
+
 #endif // CODE_BUFFER_H
