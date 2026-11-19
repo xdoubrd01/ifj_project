@@ -32,7 +32,7 @@ void gen_builtin_readLine(void);
 void gen_builtin_toInt(void);
 
 // Inicializace generatoru
-void code_gen_init(void);
+void code_gen_init(char *main_name);
 
 // Volani a definice funkci
 void gen_funct_call(char *func_name);

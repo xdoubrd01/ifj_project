@@ -116,6 +116,7 @@ void gen_builtin_print(void) {
     gen_inst3("JUMPIFNEQ", "$$print_not_nil", "LF@%type", "string@nil");
 
     gen_inst1("WRITE", "string@()");
+    gen_inst1("PUSHS", "nil@nil");
     gen_inst0("POPFRAME");
     gen_inst0("RETURN");
 
@@ -387,7 +388,7 @@ void gen_builtin_toInt(void) {
 
 // -----   IFJ26code header generation      -----
 
-void code_gen_init(void) {
+void code_gen_init(char *main_name) {
     if (!buffer_init(&code_buff)) {
         fprintf(stderr, "Error allocating buffer!\n");
         exit(99);
@@ -404,7 +405,7 @@ void code_gen_init(void) {
     gen_inst1("DEFVAR", "GF@%tmp_op2");
     gen_inst1("DEFVAR", "GF@%tmp_res");
 
-    gen_inst1("JUMP", "$main");
+    buffer_append_format(&code_buff, "JUMPI $%s\n", main_name);
 
     gen_builtin_print();
     gen_builtin_read_int();
@@ -417,6 +418,8 @@ void code_gen_init(void) {
     gen_builtin_chr();
     gen_builtin_readLine();
     gen_builtin_toInt();
+
+    gen_inst1("EXIT", "int@0");
 
     buffer_flush(&code_buff);
 }
@@ -459,7 +462,7 @@ void gen_func_return(ExprNode *ret_expr) {
         process_expr_node(ret_expr);
 
         // Ak funkcia vracia Double a výraz bol Int, prevedieme ho
-        if (current_func_ret_type == type_double && ret_expr->kind == EXPR_INT_LIT && ret_expr->kind != EXPR_INT2FLOAT) {
+        if (current_func_ret_type == type_double && ret_expr->type == EXPR_INT_LIT && ret_expr->type != EXPR_INT2FLOAT) {
             gen_inst0("INT2FLOATS");
         }
     }
@@ -625,7 +628,7 @@ void process_expr_node(ExprNode *node) {
         break;
 
     case EXPR_VAR:
-        buffer_append_format(&code_buff, "PUSHS LF@%u\n", node->u.var.id);
+        buffer_append_format(&code_buff, "PUSHS LF@v%u\n", node->u.var.id);
         break;
 
     case EXPR_NEG:
@@ -657,7 +660,9 @@ void gen_var_assign(SymTable *ts, char *var_name, data_type var_type, ExprNode *
     symbol_data *var_data = symtable_search_var(ts, var_name);
     unsigned var_id =  var_data->data.var.id;
 
-    process_expr_node(node);
+    if(!node) {
+        process_expr_node(node);
+    }
 
     // Implicitná konverzia Int -> Double na vrchole dátového zásobníka
     if (var_type == type_double && node->type == type_int) {
