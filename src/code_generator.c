@@ -307,7 +307,81 @@ void gen_builtin_substr(void) {
 }
 // AI END
 
-// other built-in functions (strLength, chr, readLine, toInt) are translated directly to IFJ26code instructions
+// Prompt:
+// napis pomocne funkcie pre definovanie tychto funkcii v cielovom jazyku: 
+// strLength, chr, readLine, toInt. pouzi instrukcnu sadu jazyka ifj26code.
+// navratovu hodnotu vracaj pomocou datoveho zasobniku
+// AI START
+// Definícia vstavanej funkcie strLength(value: String): Int
+void gen_builtin_strLength(void) {
+    gen_inst1("LABEL", "$strLength");
+    gen_inst0("CREATEFRAME");
+    gen_inst0("PUSHFRAME");
+
+    gen_inst1("DEFVAR", "LF@value");
+    gen_inst1("POPS", "LF@value");
+
+    gen_inst1("DEFVAR", "LF@%retval");
+    gen_inst2("STRLEN", "LF@%retval", "LF@value");
+
+    gen_inst1("PUSHS", "LF@%retval");
+    gen_inst0("POPFRAME");
+    gen_inst0("RETURN");
+}
+
+// Definícia vstavanej funkcie chr(code: Int): String
+void gen_builtin_chr(void) {
+    gen_inst1("LABEL", "$chr");
+    gen_inst0("CREATEFRAME");
+    gen_inst0("PUSHFRAME");
+
+    gen_inst1("DEFVAR", "LF@code");
+    gen_inst1("POPS", "LF@code");
+
+    gen_inst1("DEFVAR", "LF@%retval");
+    gen_inst2("INT2CHAR", "LF@%retval", "LF@code");
+
+    gen_inst1("PUSHS", "LF@%retval");
+    gen_inst0("POPFRAME");
+    gen_inst0("RETURN");
+}
+
+// Definícia vstavanej funkcie readLine(): String
+void gen_builtin_readLine(void) {
+    gen_inst1("LABEL", "$readLine");
+    gen_inst0("CREATEFRAME");
+    gen_inst0("PUSHFRAME");
+
+    gen_inst1("DEFVAR", "LF@%retval");
+    gen_inst2("READ", "LF@%retval", "string");
+
+    // Ak READ narazil na EOF (vrátil nil), nahradíme výsledok prázdnym reťazcom
+    gen_inst3("JUMPIFNEQ", "$readLine_end", "LF@%retval", "nil@nil");
+    gen_inst2("MOVE", "LF@%retval", "string@");
+
+    gen_inst1("LABEL", "$readLine_end");
+    gen_inst1("PUSHS", "LF@%retval");
+    gen_inst0("POPFRAME");
+    gen_inst0("RETURN");
+}
+
+// Definícia vstavanej funkcie toInt(value: Double): Int
+void gen_builtin_toInt(void) {
+    gen_inst1("LABEL", "$toInt");
+    gen_inst0("CREATEFRAME");
+    gen_inst0("PUSHFRAME");
+
+    gen_inst1("DEFVAR", "LF@value");
+    gen_inst1("POPS", "LF@value");
+
+    gen_inst1("DEFVAR", "LF@%retval");
+    gen_inst2("FLOAT2INT", "LF@%retval", "LF@value");
+
+    gen_inst1("PUSHS", "LF@%retval");
+    gen_inst0("POPFRAME");
+    gen_inst0("RETURN");
+}
+// AI END
 
 // -----   IFJ26code header generation      -----
 
