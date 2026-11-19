@@ -609,7 +609,7 @@ static data_type parse_call_or_exp(ExprNode **out_expr) {
 }
 
 static void parse_stmt_tail(void){
-    if (tok.type == TOKEN_SEMICOL || tok.type == TOKEN_EOL) advance();
+    if (tok.type == TOKEN_SEMICOLON || tok.type == TOKEN_EOL) advance();
     else syntax_error();
 }
 
@@ -676,7 +676,7 @@ static ExprNode *parse_expression_wrapper(void) {
 }
 
 static void parse_opt_return_tail(void){
-    if(tok.type == TOKEN_EOL || tok.type == TOKEN_SEMICOL){
+    if(tok.type == TOKEN_EOL || tok.type == TOKEN_SEMICOLON){
         gen_func_return(NULL);
         parse_stmt_tail();
         return;
