@@ -151,6 +151,7 @@ void parse(FILE *source) {
 
     // druhy pruchod
     advance();
+    code_gen_init();
     parse_program(SECOND_ROUND);
     
     scanner_free();
@@ -381,6 +382,7 @@ static void parse_function(ParserRound round) {
     }
 
     else{
+        gen_func_start(ts, func_name, ret_type);
         parse_function_body();
         gen_func_end();
     }
