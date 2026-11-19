@@ -102,7 +102,7 @@ void print_string(const char *str) {
 // -----   built-in functions       -----
 //AI-ASSISTED START
 void gen_builtin_print(void) {
-    gen_inst1("LABEL", "$$print");
+    gen_inst1("LABEL", "$print");
     gen_inst0("CREATEFRAME");
     gen_inst0("PUSHFRAME");
 
@@ -125,7 +125,7 @@ void gen_builtin_print(void) {
 }
 
 void gen_builtin_read_int(void) {
-    gen_inst1("LABEL", "$$read_int");
+    gen_inst1("LABEL", "$read_int");
     gen_inst0("CREATEFRAME");
     gen_inst0("PUSHFRAME");
 
@@ -145,7 +145,7 @@ void gen_builtin_read_int(void) {
 // prompt: generate C function emitting IFJcode26 subroutine for built-in readDouble()
 // AI START
 void gen_builtin_read_double(void) {
-    gen_inst1("LABEL", "$$read_double");
+    gen_inst1("LABEL", "$read_double");
     gen_inst0("CREATEFRAME");
     gen_inst0("PUSHFRAME");
     gen_inst1("DEFVAR", "LF@%res");
@@ -162,7 +162,7 @@ void gen_builtin_read_double(void) {
 // prompt: generate C function emitting IFJcode26 subroutine for built-in toStr(value)
 // AI START
 void gen_builtin_to_str(void) {
-    gen_inst1("LABEL", "$$to_str");
+    gen_inst1("LABEL", "$to_str");
     gen_inst0("CREATEFRAME");
     gen_inst0("PUSHFRAME");
     gen_inst1("DEFVAR", "LF@%val");
@@ -210,7 +210,7 @@ void gen_builtin_to_str(void) {
 // prompt: generate C function emitting IFJcode26 subroutine for built-in ord(value, index)
 // AI START
 void gen_builtin_ord(void) {
-    gen_inst1("LABEL", "$$ord");
+    gen_inst1("LABEL", "$ord");
     gen_inst0("CREATEFRAME");
     gen_inst0("PUSHFRAME");
     gen_inst1("DEFVAR", "LF@%str");
@@ -249,7 +249,7 @@ void gen_builtin_ord(void) {
 // prompt: generate C function emitting IFJcode26 subroutine for built-in substr(value, start, end)
 // AI START
 void gen_builtin_substr(void) {
-    gen_inst1("LABEL", "$$substr");
+    gen_inst1("LABEL", "$substr");
     gen_inst0("CREATEFRAME");
     gen_inst0("PUSHFRAME");
     gen_inst1("DEFVAR", "LF@%str");
