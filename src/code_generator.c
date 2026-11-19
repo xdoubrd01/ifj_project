@@ -116,6 +116,7 @@ void gen_builtin_print(void) {
     gen_inst3("JUMPIFNEQ", "$$print_not_nil", "LF@%type", "string@nil");
 
     gen_inst1("WRITE", "string@()");
+    gen_inst1("PUSHS", "nil@nil");
     gen_inst0("POPFRAME");
     gen_inst0("RETURN");
 
