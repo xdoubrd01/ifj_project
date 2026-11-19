@@ -819,12 +819,19 @@ static void parse_function_body(void){
         parse_block();
     }
 
-    else if(tok.type == TOKEN_IDENTIFIER || is_non_id_expression(tok.type)){
-        ExprNode *expr = NULL;
-        parse_call_or_exp(&expr);
-        expr_free(expr);
+    else if (tok.type == TOKEN_IDENTIFIER || is_non_id_expression(tok.type)) {
+    ExprNode *expr = NULL;
+    data_type expr_type = parse_call_or_exp(&expr);
 
-        expect(TOKEN_EOL);
+    if (current_return_type != type_unknown &&
+        expr_type != current_return_type &&
+        !(current_return_type == type_double && expr_type == type_int)) {
+        expr_free(expr);
+        exit(6);
+    }
+
+    expr_free(expr);
+    expect(TOKEN_EOL);
     }
 }
 
