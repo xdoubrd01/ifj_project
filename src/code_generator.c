@@ -19,7 +19,7 @@ typedef struct {
 LabelCounter if_counter;
 LabelCounter while_counter;
 
-CodeBuffer *code_buff;
+CodeBuffer code_buff;
 
 static char *current_func_name = NULL;
 static data_type current_func_ret_type = type_unknown;
@@ -36,23 +36,23 @@ static data_type current_func_ret_type = type_unknown;
 
 // AI START
 void gen_inst0(const char *inst) {
-    buffer_append_format(code_buff, "%s\n", inst);
+    buffer_append_format(&code_buff, "%s\n", inst);
 }
 
 void gen_inst1(const char *inst, const char *arg1) {
-    buffer_append_format(code_buff, "%s %s\n", inst, arg1);
+    buffer_append_format(&code_buff, "%s %s\n", inst, arg1);
 }
 
 void gen_inst2(const char *inst, const char *arg1, const char *arg2) {
-    buffer_append_format(code_buff, "%s %s %s\n", inst, arg1, arg2);
+    buffer_append_format(&code_buff, "%s %s %s\n", inst, arg1, arg2);
 }
 
 void gen_inst3(const char *inst, const char *arg1, const char *arg2, const char *arg3) {
-    buffer_append_format(code_buff, "%s %s %s %s\n", inst, arg1, arg2, arg3);
+    buffer_append_format(&code_buff, "%s %s %s %s\n", inst, arg1, arg2, arg3);
 }
 
 void gen_inst4(const char *inst, const char *arg1, const char *arg2, const char *arg3, const char *arg4) {
-    buffer_append_format(code_buff, "%s %s %s %s %s\n", inst, arg1, arg2, arg3, arg4);
+    buffer_append_format(&code_buff, "%s %s %s %s %s\n", inst, arg1, arg2, arg3, arg4);
 }
 // AI END
 
@@ -66,38 +66,38 @@ void gen_inst4(const char *inst, const char *arg1, const char *arg2, const char 
 
 // AI START
 void print_double(const double val) {
-    buffer_append_format(code_buff, "float@%a\n", val);
+    buffer_append_format(&code_buff, "float@%a\n", val);
 }
 
 // prompt:
 // do the same for those formats
 // bool@true, nil@nil, int@-5
 void print_bool(const bool val) {
-    buffer_append_format(code_buff, "bool@%s\n", val ? "true" : "false");
+    buffer_append_format(&code_buff, "bool@%s\n", val ? "true" : "false");
 }
 
 void print_nil(void) {
-    buffer_append_string(code_buff, "nil@nil\n");
+    buffer_append_string(&code_buff, "nil@nil\n");
 }
 
 void print_int(const int val) {
-    buffer_append_format(code_buff, "int@%lld\n", (long long)val);
+    buffer_append_format(&code_buff, "int@%lld\n", (long long)val);
 }
 // AI END
 
 void print_string(const char *str) {
-    buffer_append_string(code_buff, "string@");
+    buffer_append_string(&code_buff, "string@");
     if (str != NULL) {
         for (const char *p = str; *p != '\0'; p++) {
             unsigned char c = (unsigned char)*p;
             if (c <= 32 || c == 35 || c == 92) {
-                buffer_append_format(code_buff, "\\%03d", c);
+                buffer_append_format(&code_buff, "\\%03d", c);
             } else {
-                buffer_append_char(code_buff, *p);
+                buffer_append_char(&code_buff, *p);
             }
         }
     }
-    buffer_append_string(code_buff, "\n");
+    buffer_append_string(&code_buff, "\n");
 }
 
 
@@ -388,7 +388,7 @@ void gen_builtin_toInt(void) {
 // -----   IFJ26code header generation      -----
 
 void code_gen_init(void) {
-    if (!buffer_init(code_buff)) {
+    if (!buffer_init(&code_buff)) {
         fprintf(stderr, "Error allocating buffer!\n");
         exit(99);
     }
@@ -418,13 +418,13 @@ void code_gen_init(void) {
     gen_builtin_readLine();
     gen_builtin_toInt();
 
-    buffer_flush(code_buff);
+    buffer_flush(&code_buff);
 }
 
 // -----    function generation     -----
 
 void gen_funct_call(char *func_name){
-    buffer_append_format(code_buff, "CALL $%s\n", func_name);
+    buffer_append_format(&code_buff, "CALL $%s\n", func_name);
 }
 
 void gen_func_start(SymTable *table, char *func_name, data_type ret_type) {
@@ -446,8 +446,8 @@ void gen_func_start(SymTable *table, char *func_name, data_type ret_type) {
     for (size_t i = param_count; i > 0; i--) {
         symbol_data *var_data = symtable_search_var(table, func_data->data.func.param_names[i - 1]);
         if (var_data != NULL) {
-            buffer_append_format(code_buff, "DEFVAR LF@v%u\n", var_data->data.var.id);
-            buffer_append_format(code_buff, "POPS LF@v%u\n", var_data->data.var.id);
+            buffer_append_format(&code_buff, "DEFVAR LF@v%u\n", var_data->data.var.id);
+            buffer_append_format(&code_buff, "POPS LF@v%u\n", var_data->data.var.id);
         }
     }
 }
@@ -464,24 +464,24 @@ void gen_func_return(ExprNode *ret_expr) {
         }
     }
     // Nepodmienený skok na spoločný epilóg funkcie, aby prebehol POPFRAME
-    buffer_append_format(code_buff, "JUMP $%s$end\n", current_func_name);
+    buffer_append_format(&code_buff, "JUMP $%s$end\n", current_func_name);
 }
 
 // TODO: pridat osetrenie pre 'return func()'
 // mozne riesenie vraciat hodnotu na vrchu zasobniku -> vyraz z volanej funkcie pomocou return bude automaticky na vrchu ->
 // podporovane rozsirenie FUNEX
 void gen_func_end(void) {
-    buffer_append_format(code_buff, "LABEL $%s$end\n", current_func_name);
+    buffer_append_format(&code_buff, "LABEL $%s$end\n", current_func_name);
 
     if (current_func_ret_type == type_unit) {
-        buffer_append_string(code_buff, "PUSHS nil@nil\n");
+        buffer_append_string(&code_buff, "PUSHS nil@nil\n");
     }
 
     gen_inst0("POPFRAME");
     // Návrat na inštrukciu za CALL
     gen_inst0("RETURN");
 
-    buffer_flush(code_buff);
+    buffer_flush(&code_buff);
 }
 // AI-ASSISTED END
 
@@ -494,21 +494,21 @@ void gen_if_start(ExprNode *expr) {
     if_counter.stack_top++;
 
     process_expr_node(expr);
-    buffer_append_string(code_buff, "PUSHS bool@false\n");
-    buffer_append_format(code_buff, "JUMPIFEQS $else_%d\n", current_id);
+    buffer_append_string(&code_buff, "PUSHS bool@false\n");
+    buffer_append_format(&code_buff, "JUMPIFEQS $else_%d\n", current_id);
 }
 
 void gen_if_else(void) {
     int current_id = if_counter.stack[if_counter.stack_top - 1];
 
-    buffer_append_format(code_buff, "JUMP $if_skip_%d\n", current_id);
-    buffer_append_format(code_buff, "LABEL $else_%d\n", current_id);
+    buffer_append_format(&code_buff, "JUMP $if_skip_%d\n", current_id);
+    buffer_append_format(&code_buff, "LABEL $else_%d\n", current_id);
 }
 
 void gen_if_end(void) {
     int current_id = if_counter.stack[--if_counter.stack_top];
 
-    buffer_append_format(code_buff, "LABEL $if_skip_%d\n", current_id);
+    buffer_append_format(&code_buff, "LABEL $if_skip_%d\n", current_id);
 }
 // AI-ASSISTED END
 
@@ -520,18 +520,18 @@ void gen_while_start(ExprNode *expr) {
     while_counter.stack_top++;
 
     // TODO: GENERATE VARIABLES BEFORE LABEL (waiting for parser and symtable adjustment)
-    buffer_append_format(code_buff, "LABEL $while_start_%d\n", current_id);
+    buffer_append_format(&code_buff, "LABEL $while_start_%d\n", current_id);
 
     process_expr_node(expr);
-    buffer_append_string(code_buff, "PUSHS bool@false\n");
-    buffer_append_format(code_buff, "JUMPIFEQS $while_end_%d\n", current_id);
+    buffer_append_string(&code_buff, "PUSHS bool@false\n");
+    buffer_append_format(&code_buff, "JUMPIFEQS $while_end_%d\n", current_id);
 }
 
 void gen_while_end(void) {
     int current_id = while_counter.stack[--while_counter.stack_top];
 
-    buffer_append_format(code_buff, "JUMP $while_start_%d\n", current_id);
-    buffer_append_format(code_buff, "LABEL $while_end_%d\n", current_id);
+    buffer_append_format(&code_buff, "JUMP $while_start_%d\n", current_id);
+    buffer_append_format(&code_buff, "LABEL $while_end_%d\n", current_id);
 }
 
 
@@ -594,10 +594,10 @@ void process_expr_node(ExprNode *node) {
                 // We must pop the operands into temporary variables (e.g., in GF), 
                 // perform CONCAT, and push the result back.
                 // (Make sure to define GF@%tmp_op1, GF@%tmp_op2, GF@%tmp_res during program initialization)
-                buffer_append_string(code_buff, "POPS GF@%tmp_op2\n");
-                buffer_append_string(code_buff, "POPS GF@%tmp_op1\n");
-                buffer_append_string(code_buff, "CONCAT GF@%tmp_res GF@%tmp_op1 GF@%tmp_op2\n");
-                buffer_append_string(code_buff, "PUSHS GF@%tmp_res\n");
+                buffer_append_string(&code_buff, "POPS GF@%tmp_op2\n");
+                buffer_append_string(&code_buff, "POPS GF@%tmp_op1\n");
+                buffer_append_string(&code_buff, "CONCAT GF@%tmp_res GF@%tmp_op1 GF@%tmp_op2\n");
+                buffer_append_string(&code_buff, "PUSHS GF@%tmp_res\n");
                 break;
         }
         // AI END
@@ -605,27 +605,27 @@ void process_expr_node(ExprNode *node) {
 
     switch (node->kind) {
     case EXPR_INT_LIT:
-        buffer_append_string(code_buff, "PUSHS ");
+        buffer_append_string(&code_buff, "PUSHS ");
         print_int(node->u.i_val);
         break;
     
     case EXPR_DOUBLE_LIT:
-        buffer_append_string(code_buff, "PUSHS ");
+        buffer_append_string(&code_buff, "PUSHS ");
         print_double(node->u.d_val);
         break;
 
     case EXPR_STRING_LIT:
-        buffer_append_string(code_buff, "PUSHS ");
+        buffer_append_string(&code_buff, "PUSHS ");
         print_string(node->u.s_val);
         break;
 
     case EXPR_UNIT_LIT:
-        buffer_append_string(code_buff, "PUSHS ");
+        buffer_append_string(&code_buff, "PUSHS ");
         print_nil();
         break;
 
     case EXPR_VAR:
-        buffer_append_format(code_buff, "PUSHS LF@%u\n", node->u.var.id);
+        buffer_append_format(&code_buff, "PUSHS LF@%u\n", node->u.var.id);
         break;
 
     case EXPR_NEG:
@@ -665,7 +665,7 @@ void gen_var_assign(SymTable *ts, char *var_name, data_type var_type, ExprNode *
     }
 
     // Uloženie výsledku zo zásobníka do premennej v LF (bez DEFVAR)
-    buffer_append_format(code_buff, "POPS LF@v%u\n", var_id);
+    buffer_append_format(&code_buff, "POPS LF@v%u\n", var_id);
 }
 
 void gen_def_var(SymTable *ts, char *var_name, data_type var_type, ExprNode *node) {
