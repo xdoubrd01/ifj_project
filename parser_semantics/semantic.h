@@ -1,3 +1,7 @@
+// Project:    IFJ26
+// Filename:   semantic.h
+// Author:     Jakub Grásgruber <xgrasgj00>
+
 /*
  * semantic.h - semantic checks used by the parser and the expression parser
  *
