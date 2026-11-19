@@ -1,4 +1,10 @@
 /**
+ *@author Denis Doubrava xdoubrd01
+ * Použitý model: GPT-6.1 Sol
+ * Tvorba komentářů byla za pomoci umělé inteligence: překlad, formátování a lepší formulace vět
+ */
+
+/**
  * @file scanner.h
  * @brief Token types and a stateful scanner interface for base IFJ26.
  *
@@ -18,6 +24,14 @@
  * @note Unit literals are represented by LPAREN followed by RPAREN.
  * @note Physical line breaks inside parentheses do not produce EOL tokens.
  */
+
+/**
+ * Začátek AI části
+ * Použitý model: GPT-6.1 Sol
+ * Prompt: Ze zadaných fotek DKA mi vytvoř enum na seznam tokenů, ke každému tokenu přidej komentář
+ * popisující token a rozděl je do smysluplných skupin
+ */
+
 typedef enum {
     TOKEN_EOF, // End of input
     TOKEN_EOL, // End of a nonempty logical line
@@ -47,23 +61,21 @@ typedef enum {
     TOKEN_TYPE_UNIT,
 
     // Operators and separators
-    TOKEN_ASSIGN, // =
-    TOKEN_PLUS,   // +
-    TOKEN_MINUS,  // -
-    TOKEN_MUL,    // *
-    TOKEN_DIV,    // /
-    TOKEN_EQ,     // ==
-    TOKEN_NEQ,    // !=
-    TOKEN_LT,     // <
-    TOKEN_LEQ,    // <=
-    TOKEN_GT,     // >
-    TOKEN_GEQ,    // >=
-    TOKEN_LPAREN, // (
-    TOKEN_RPAREN, // )
-    TOKEN_COLON,  // :
-    TOKEN_COMMA,  // ,
-    TOKEN_AT,     // @
-    TOKEN_SEMICOL,// ;
+    TOKEN_ASSIGN,  // =
+    TOKEN_PLUS,    // +
+    TOKEN_MINUS,   // -
+    TOKEN_MUL,     // *
+    TOKEN_DIV,     // /
+    TOKEN_EQ,      // ==
+    TOKEN_NEQ,     // !=
+    TOKEN_LT,      // <
+    TOKEN_LEQ,     // <=
+    TOKEN_GT,      // >
+    TOKEN_GEQ,     // >=
+    TOKEN_LPAREN,  // (
+    TOKEN_RPAREN,  // )
+    TOKEN_COLON,   // :
+    TOKEN_COMMA,   // ,
 
     // Additional punctuation and the entry-point annotation
     TOKEN_DOT,       // .
