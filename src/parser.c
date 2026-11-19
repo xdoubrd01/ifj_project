@@ -7,6 +7,9 @@
 #include "symtable.h"
 #include "exp_parser.h"
 #include "semantic.h"
+#include "code_generator.c"
+#include "exp_parser.h"
+#include "semantic.h"
 #include "code_generator.h"
 
 // Aktualni token a pripadny prednacteny token ze scanneru.
@@ -377,11 +380,6 @@ static void parse_function(ParserRound round) {
     }
 
     else{
-<<<<<<< HEAD
-        // TODO: Connect function generation when gen_func_start() is implemented.
-=======
-        gen_func_start(ts, func_name, ret_type);
->>>>>>> origin/code_gen
         parse_function_body();
         gen_func_end();
     }
