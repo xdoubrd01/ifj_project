@@ -19,6 +19,7 @@ static Token lookahead;
 static bool has_lookahead = false;
 static SymTable *ts = NULL;
 static data_type current_return_type = type_unknown;
+static bool main_found = false;
 
 typedef enum {
     FIRST_ROUND,
@@ -184,6 +185,7 @@ void parse(FILE *source) {
     // druhy pruchod
     code_gen_init();
     advance();
+    code_gen_init();
     parse_program(SECOND_ROUND);
     
     scanner_free();
@@ -885,14 +887,23 @@ static void parse_stmt(void) {
         gen_if_end();
     }
 
-    else if(tok.type == TOKEN_IDENTIFIER){
+    else if (tok.type == TOKEN_IDENTIFIER) {
+
+    if (peek_token() == TOKEN_LPAREN) {
+        parse_function_call();
+        parse_stmt_tail();
+    }
+
+    else {
         char *var_name = strdup(tok.attribute.s_val);
         if (var_name == NULL) exit(99);
 
         advance();
         parse_stmt_tail_id(var_name);
+
         free(var_name);
     }
+}
 
     else if(is_non_id_expression(tok.type) == 1){
         parse_non_id_expression();
@@ -902,7 +913,6 @@ static void parse_stmt(void) {
     else syntax_error();
 
 }
-
 
 static void parse_stmts(void) {
     if(is_stmt_start(tok.type) == 1){
