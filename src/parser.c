@@ -467,13 +467,22 @@ static void parse_function(ParserRound round) {
 }
 
 /* 10. BLOCK -> INDENT STMT STMTS DEDENT */
+
 static void parse_block(void) {
     expect(TOKEN_INDENT);
+
+    if (!symtable_enter_scope(ts)) {
+        exit(99);
+    }
+
     parse_stmt();
     parse_stmts();
+
     expect(TOKEN_DEDENT);
 
+    symtable_leave_scope(ts);
 }
+
 
 
 static data_type parse_type(void) {
