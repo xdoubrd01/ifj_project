@@ -394,6 +394,11 @@ void code_gen_init(char *main_name) {
         exit(99);
     }
 
+    if (main_name == NULL) {
+        fprintf(stderr, "Internal error: missing entry function\n");
+        exit(99);
+    }
+
     if_counter.cnt = 0;
     if_counter.stack_top = 0;
     while_counter.cnt = 0;
@@ -405,7 +410,7 @@ void code_gen_init(char *main_name) {
     gen_inst1("DEFVAR", "GF@%tmp_op2");
     gen_inst1("DEFVAR", "GF@%tmp_res");
 
-    buffer_append_format(&code_buff, "JUMPI $%s\n", main_name);
+    buffer_append_format(&code_buff, "JUMP $%s\n", main_name);
 
     gen_builtin_print();
     gen_builtin_read_int();
