@@ -460,7 +460,7 @@ void gen_func_return(ExprNode *ret_expr) {
         process_expr_node(ret_expr);
 
         // Ak funkcia vracia Double a výraz bol Int, prevedieme ho
-        if (current_func_ret_type == type_double && ret_expr->kind == EXPR_INT_LIT && ret_expr->kind != EXPR_INT2FLOAT) {
+        if (current_func_ret_type == type_double && ret_expr->type == EXPR_INT_LIT && ret_expr->type != EXPR_INT2FLOAT) {
             gen_inst0("INT2FLOATS");
         }
     }
