@@ -416,8 +416,8 @@ void code_gen_init(void) {
 
 // -----    function generation     -----
 
-void gen_funct_call(){
-    ;
+void gen_funct_call(char *func_name){
+    buffer_append_format(code_buff, "CALL $%s\n", func_name);
 }
 
 void gen_func_start(SymTable *table, char *func_name, data_type ret_type) {

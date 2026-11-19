@@ -489,7 +489,7 @@ static data_type parse_function_call(void) {
         char *function_name = strdup(tok.attribute.s_val);
         if (function_name == NULL) exit(99);
 
-            symbol_data *function = symtable_search_func(ts, function_name);
+        symbol_data *function = symtable_search_func(ts, function_name);
 
         if (function == NULL) {
             fprintf(stderr, "Undefined function: %s\n", function_name);
@@ -528,6 +528,8 @@ static data_type parse_function_call(void) {
                 ExprNode *arg = parse_expression_wrapper();
                 if (arg == NULL) exit(99);
 
+                // proccess argument expression, and push to stack
+                process_expr_node(arg);
                 
                 data_type type = arg->type;
                 expr_free(arg);
@@ -555,6 +557,8 @@ static data_type parse_function_call(void) {
             }
 
             data_type return_type = function->data.func.ret_type;
+
+            gen_funct_call(function_name);
 
             free(function_name);
             return return_type;
