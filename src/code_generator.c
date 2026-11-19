@@ -4,9 +4,11 @@
 
 #include <stdio.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include "symtable.h"
 #include "expr_tree.h"
 #include "code_buffer.h"
+#include "code_generator.h"
 
 typedef struct {
     int cnt;       // celkový počet doteraz videných ifov (1, 2, 3...)
@@ -386,7 +388,7 @@ void gen_builtin_toInt(void) {
 // -----   IFJ26code header generation      -----
 
 void code_gen_init(void) {
-    if (!buffer_init(&code_buff)) {
+    if (!buffer_init(code_buff)) {
         fprintf(stderr, "Error allocating buffer!\n");
         exit(99);
     }
@@ -447,7 +449,7 @@ void gen_func_start(SymTable *table, char *func_name, data_type ret_type) {
 void gen_func_return(ExprNode *ret_expr) {
     if (ret_expr != NULL) {
         // 1. Vždy vyhodnotíme výraz (aj keď je návratový typ Unit, kvôli vedľajším efektom)
-        gen_expr_tree(ret_expr);
+        process_expr_node(ret_expr);
 
         // Ak funkcia vracia Double a výraz bol Int, prevedieme ho
         if (current_func_ret_type == type_double && ret_expr->kind == EXPR_INT_LIT && ret_expr->kind != EXPR_INT2FLOAT) {
@@ -656,7 +658,7 @@ void gen_var_assign(SymTable *ts, char *var_name, data_type var_type, ExprNode *
     }
 
     // Uloženie výsledku zo zásobníka do premennej v LF (bez DEFVAR)
-    buffer_append_format(code_buff, "POPS LF@%u\n", var_data->data.var.id);
+    buffer_append_format(code_buff, "POPS LF@%u\n", var_id);
 }
 
 void gen_def_var(SymTable *ts, char *var_name, data_type var_type, ExprNode *node) {
