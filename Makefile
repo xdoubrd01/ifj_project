@@ -16,7 +16,7 @@ all: $(TARGET)
 $(TARGET): $(OBJECTS)
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
-build/%.o: src/%.c MAKEFILE | build
+build/%.o: src/%.c Makefile | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -MMD -MP -c $< -o $@
 
 build:
