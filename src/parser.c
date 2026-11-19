@@ -1,4 +1,6 @@
 #include "parser.h"
+#include "code_generator.h"
+#include "expr_tree.h"
 #include "scanner.h"
 #include <stddef.h>
 #include <stdio.h>
@@ -10,7 +12,7 @@
 #include "code_generator.c"
 #include "exp_parser.h"
 #include "semantic.h"
-#include "code_generator.c"
+
 
 // Aktualni token a pripadny prednacteny token ze scanneru.
 static Token tok; // current token
@@ -588,27 +590,23 @@ static data_type parse_function_call(void) {
 }
 
 // Volani funkce zatim resime zvlast, ostatni vyrazy pres precedencni parser.
-static data_type parse_call_or_exp(void) {
-    if (tok.type == TOKEN_IDENTIFIER &&
-        peek_token() == TOKEN_LPAREN) {
+// AI-assisted (ChatGPT): pridani vystupniho parametru pro ExprNode.
+static data_type parse_call_or_exp(ExprNode **out_expr) {
+    *out_expr = NULL;
 
-            return parse_function_call();
-     
-    } else if (tok.type == TOKEN_IDENTIFIER ||
-               is_non_id_expression(tok.type)) {
-
-        
-        ExprNode *expr = parse_expression_wrapper();
-        if(expr == NULL) exit(99);
-
-        data_type result_type = expr->type;
-        expr_free(expr);
-
-        return result_type;
-
-    } else {
-        syntax_error();
+    if (tok.type == TOKEN_IDENTIFIER && peek_token() == TOKEN_LPAREN) {
+        return parse_function_call();
     }
+
+    if (tok.type == TOKEN_IDENTIFIER || is_non_id_expression(tok.type)) {
+        ExprNode *expr = parse_expression_wrapper();
+        if (expr == NULL) exit(99);
+
+        *out_expr = expr;
+        return expr->type;
+    }
+
+    syntax_error();
 }
 
 static void parse_stmt_tail(void){
@@ -619,7 +617,10 @@ static void parse_stmt_tail(void){
 static void parse_stmt_tail_id(void){
 if(tok.type == TOKEN_ASSIGN){
     advance();
-    parse_call_or_exp();
+
+    ExprNode *expr = NULL;
+    parse_call_or_exp(&expr);
+    expr_free(expr);
 }
 
 else if(tok.type == TOKEN_LPAREN){
@@ -673,16 +674,24 @@ static ExprNode *parse_expression_wrapper(void) {
 
 static void parse_opt_return_tail(void){
     if(tok.type == TOKEN_EOL || tok.type == TOKEN_SEMICOL){
-        parse_stmt_tail();
         gen_func_return(NULL);
-        // return bez expr
+        parse_stmt_tail();
+        return;
     }
 
     else if(tok.type == TOKEN_IDENTIFIER || is_non_id_expression(tok.type) == 1){
-        parse_call_or_exp();
+        ExprNode *expr = NULL;
+        parse_call_or_exp(&expr);
+
+        gen_func_return(expr);
+        expr_free(expr);
+
         parse_stmt_tail();
-        // TODO: implementovat gen_func_return
-        //return s expr
+        return;
+    }
+
+    else{
+        syntax_error();
     }
 }
 
@@ -693,7 +702,10 @@ static void parse_function_body(void){
     }
 
     else if(tok.type == TOKEN_IDENTIFIER || is_non_id_expression(tok.type)){
-        parse_call_or_exp();
+        ExprNode *expr = NULL;
+        parse_call_or_exp(&expr);
+        expr_free(expr);
+
         expect(TOKEN_EOL);
     }
 }
@@ -721,7 +733,11 @@ static void parse_stmt(void) {
         expect(TOKEN_IDENTIFIER);
         data_type var_type = parse_opt_type();
         expect(TOKEN_ASSIGN);
-        data_type expr_type = parse_call_or_exp();
+
+        ExprNode *expr = NULL;
+        data_type expr_type = parse_call_or_exp(&expr);
+        expr_free(expr);
+
         int rc = sem_declare_variable(ts, var_name, var_type, expr_type, is_var, NULL);
 
         if (rc != 0) {
