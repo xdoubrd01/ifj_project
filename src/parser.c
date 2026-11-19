@@ -181,6 +181,7 @@ void parse(FILE *source) {
     scanner_init(source);
 
     // druhy pruchod
+    code_gen_init();
     advance();
     parse_program(SECOND_ROUND);
     
@@ -555,10 +556,11 @@ static data_type parse_function_call(void) {
             if (arg == NULL) exit(99);
 
             data_type arg_type = arg->type;
-            expr_free(arg);
+        
 
             if (arg_count >= function->data.func.param_count) {
                 free(function_name);
+                expr_free(arg);
                 exit(5);
             }
 
@@ -566,9 +568,12 @@ static data_type parse_function_call(void) {
 
             if (expected_type != type_any && arg_type != expected_type) {
                 free(function_name);
+                expr_free(arg);
                 exit(5);
             }
 
+            process_expr_node(arg);
+            expr_free(arg);
             arg_count++;
 
             while (tok.type == TOKEN_COMMA) {
