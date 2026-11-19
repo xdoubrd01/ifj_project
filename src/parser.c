@@ -620,8 +620,7 @@ if(tok.type == TOKEN_ASSIGN){
     ExprNode *expr = NULL;
     data_type expr_type = parse_call_or_exp(&expr);
 
-    (void)var_name;
-    (void)expr_type;
+    gen_var_assign(ts, var_name, expr_type, expr);
 
     expr_free(expr);
     
