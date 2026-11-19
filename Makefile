@@ -1,6 +1,6 @@
 CC = gcc
 CPPFLAGS += -Isrc -D_POSIX_C_SOURCE=200809L
-CFLAGS ?= -std=c11 -O2 -Wall -Wextra -Wpedantic
+CFLAGS ?= -std=c23 -O2 -Wall -Wextra -Wpedantic
 
 TARGET := ifj26
 SOURCES := $(wildcard src/*.c)
