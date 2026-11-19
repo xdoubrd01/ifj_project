@@ -416,6 +416,10 @@ void code_gen_init(void) {
 
 // -----    function generation     -----
 
+void gen_funct_call(){
+    ;
+}
+
 void gen_func_start(SymTable *table, char *func_name, data_type ret_type) {
     current_func_name = func_name;
     current_func_ret_type = ret_type;
@@ -423,11 +427,19 @@ void gen_func_start(SymTable *table, char *func_name, data_type ret_type) {
     printf("LABEL $%s\n", func_name);
 
     symbol_data *func_data = symtable_search_func(table, func_name);
+    if (func_data == NULL) {
+        return;
+    }
+
     size_t param_count = func_data->data.func.param_count;
 
-    for (size_t i = 0; i <  param_count; i++) {
-        symbol_data *var_data = symtable_search_var(table, func_data->data.func.param_names[i]);
-        printf("DEFVAR %u", var_data->data.var.id);
+    // Definícia lokálnej premennej a jej naplnenie zo zásobníka od posledného parametra po prvý
+    for (size_t i = param_count; i > 0; i--) {
+        symbol_data *var_data = symtable_search_var(table, func_data->data.func.param_names[i - 1]);
+        if (var_data != NULL) {
+            buffer_append_format(code_buff, "DEFVAR LF@%s\n", var_data->data.var.id);
+            buffer_append_format(code_buff, "POPS LF@%s\n", var_data->data.var.id);
+        }
     }
 }
 
