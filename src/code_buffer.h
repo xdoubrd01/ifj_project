@@ -5,7 +5,7 @@
 #include <stdbool.h>
 
 // Počiatočná veľkosť buffera
-#define BUFFER_INIT_CAPACITY 128
+#define BUFFER_INIT_CAPACITY 512
 
 typedef struct {
     char *data;      // Ukazovateľ na samotný vygenerovaný kód
