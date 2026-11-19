@@ -18,6 +18,7 @@ static Token tok; // current token
 static Token lookahead;
 static bool has_lookahead = false;
 static SymTable *ts = NULL;
+static data_type current_return_type = type_unknown;
 
 typedef enum {
     FIRST_ROUND,
@@ -378,6 +379,7 @@ static void parse_function(ParserRound round) {
     expect(TOKEN_LPAREN);
     parse_parameters_list(&param_types, &param_names, &param_count);
     expect(TOKEN_RPAREN);
+
     data_type ret_type = parse_opt_return_type();
 
     if(round == FIRST_ROUND){
@@ -412,10 +414,17 @@ static void parse_function(ParserRound round) {
         skip_function_body();
     }
 
-    else{
-        parse_function_body();
-        gen_func_end();
-    }
+    else {
+    current_return_type = ret_type;
+
+    gen_func_start(ts, func_name, ret_type);
+
+    parse_function_body();
+
+    gen_func_end();
+
+    current_return_type = type_unknown;
+}
 
     symtable_leave_scope(ts);
 
@@ -650,16 +659,38 @@ static void parse_stmt_tail(void){
 }
 
 static void parse_stmt_tail_id(char *var_name){
-if(tok.type == TOKEN_ASSIGN){
+if (tok.type == TOKEN_ASSIGN) {
     advance();
 
     ExprNode *expr = NULL;
     data_type expr_type = parse_call_or_exp(&expr);
 
-    gen_var_assign(ts, var_name, expr_type, expr);
+    unsigned var_id;
+    int rc = sem_check_assignment(ts, var_name, expr_type, &var_id);
+
+    if (rc != 0) {
+        expr_free(expr);
+        exit(rc);
+    }
+
+    data_type var_type;
+    rc = sem_get_variable_type(ts, var_name, &var_type, NULL);
+
+    if (rc != 0) {
+        expr_free(expr);
+        exit(rc);
+    }
+
+    if (expr != NULL) {
+        gen_var_assign(ts, var_name, var_type, expr);
+
+    } else {
+        // TODO: prirazeni vysledku volani funkce
+        // parse_call_or_exp() uz v tomto pripade generoval CALL.
+        // Zde je potreba ulozit navratovou hodnotu do promenne.
+    }
 
     expr_free(expr);
-    
 }
 
 else if(tok.type == TOKEN_LPAREN){
@@ -711,16 +742,29 @@ static ExprNode *parse_expression_wrapper(void) {
     return expr;
 }
 
-static void parse_opt_return_tail(void){
-    if(tok.type == TOKEN_EOL || tok.type == TOKEN_SEMICOLON){
+static void parse_opt_return_tail(void) {
+    if (tok.type == TOKEN_EOL || tok.type == TOKEN_SEMICOLON) {
+
+        if (current_return_type != type_unit &&
+            current_return_type != type_unknown) {
+            exit(6);
+        }
+
         gen_func_return(NULL);
         parse_stmt_tail();
         return;
     }
 
-    else if(tok.type == TOKEN_IDENTIFIER || is_non_id_expression(tok.type) == 1){
+    else if (tok.type == TOKEN_IDENTIFIER ||
+             is_non_id_expression(tok.type)) {
+
         ExprNode *expr = NULL;
-        parse_call_or_exp(&expr);
+        data_type expr_type = parse_call_or_exp(&expr);
+
+        if (current_return_type != type_unknown && expr_type != current_return_type && !(current_return_type == type_double && expr_type == type_int)) {
+            expr_free(expr);
+            exit(6);
+        }
 
         gen_func_return(expr);
         expr_free(expr);
@@ -729,9 +773,7 @@ static void parse_opt_return_tail(void){
         return;
     }
 
-    else{
-        syntax_error();
-    }
+    syntax_error();
 }
 
 static void parse_function_body(void){
@@ -781,8 +823,13 @@ static void parse_stmt(void) {
             free(var_name);
             exit(rc);
         }
-
+        if(expr != NULL){
         gen_def_var(ts, var_name, var_type, expr);
+
+        }
+        else{
+
+        }
         expr_free(expr);
 
         free(var_name);  
@@ -791,10 +838,20 @@ static void parse_stmt(void) {
 
     else if(tok.type == TOKEN_KW_WHILE){
         advance();
-        ExprNode *expr = parse_expression_wrapper();    //free() may be needed?
+        ExprNode *expr = parse_expression_wrapper();
+        
+        int rc = sem_check_condition(expr);
+        if (rc != 0) {
+            expr_free(expr);
+            exit(rc);
+        }
+        
         expect(TOKEN_KW_DO);
         expect(TOKEN_EOL);
+
         gen_while_start(expr);
+        expr_free(expr);
+        
         parse_block();
         gen_while_end();
     }
@@ -806,10 +863,20 @@ static void parse_stmt(void) {
 
     else if(tok.type == TOKEN_KW_IF){
         advance();
-        ExprNode *expr = parse_expression_wrapper();    //free() may be needed?
+        ExprNode *expr = parse_expression_wrapper();
+        
+        int rc = sem_check_condition(expr);
+        if (rc != 0) {
+            expr_free(expr);
+            exit(rc);
+        }
+       
         expect(TOKEN_KW_THEN);
         expect(TOKEN_EOL);
+
         gen_if_start(expr);
+        expr_free(expr);
+
         parse_block();
         expect(TOKEN_KW_ELSE);
         expect(TOKEN_EOL);
