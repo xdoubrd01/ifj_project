@@ -410,7 +410,7 @@ void code_gen_init(char *main_name) {
     gen_inst1("DEFVAR", "GF@%tmp_op2");
     gen_inst1("DEFVAR", "GF@%tmp_res");
 
-    buffer_append_format(&code_buff, "JUMP $%s\n", main_name);
+    buffer_append_format(&code_buff, "CALL $%s\n", main_name);
 
     gen_inst1("EXIT", "int@0");
 
