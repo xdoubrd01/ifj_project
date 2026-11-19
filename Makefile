@@ -1,5 +1,5 @@
 CC = gcc
-CPPFLAGS += -Isrc -D_POSIX_C_SOURCE=200809L
+CPPFLAGS += -Isrc
 CFLAGS ?= -std=c23 -O2 -Wall -Wextra -Wpedantic
 
 TARGET := ifj26

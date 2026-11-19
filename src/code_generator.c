@@ -387,7 +387,12 @@ void gen_builtin_toInt(void) {
 
 // -----   IFJ26code header generation      -----
 
-void code_gen_init(void) {
+void code_gen_init(const char *entry_name) {
+    if (entry_name == NULL) {
+        fprintf(stderr, "Internal error: missing entry function\n");
+        exit(99);
+    }
+
     if (!buffer_init(&code_buff)) {
         fprintf(stderr, "Error allocating buffer!\n");
         exit(99);
@@ -404,7 +409,12 @@ void code_gen_init(void) {
     gen_inst1("DEFVAR", "GF@%tmp_op2");
     gen_inst1("DEFVAR", "GF@%tmp_res");
 
-    gen_inst1("JUMP", "$main");
+    /* CALL records where RETURN should resume; EXIT prevents fallthrough. */
+    if (!buffer_append_format(&code_buff, "CALL $%s\n", entry_name)) {
+        fprintf(stderr, "Error generating entry call!\n");
+        exit(99);
+    }
+    gen_inst1("EXIT", "int@0");
 
     gen_builtin_print();
     gen_builtin_read_int();

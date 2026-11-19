@@ -8,14 +8,15 @@
  * @file scanner.h
  * @brief Token types and a stateful scanner interface for base IFJ26.
  *
- * The caller owns the input stream and all successfully returned identifier
- * and string attributes. Only one scanner instance is active at a time.
+ * The caller owns the input stream or memory buffer and all successfully
+ * returned identifier and string attributes. One scanner is active at a time.
  */
 
 #ifndef SCANNER_H
 #define SCANNER_H
 
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdio.h>
 
 /**
@@ -125,6 +126,15 @@ typedef struct {
 void scanner_init(FILE *source_file);
 
 /**
+ * @brief Resets the scanner to read a caller-owned memory buffer.
+ *
+ * The buffer need not be zero-terminated and must remain valid until the
+ * scanner is freed or initialized again. NULL is allowed only for length 0.
+ * Returned token attributes are separately allocated and caller-owned.
+ */
+void scanner_init_buffer(const char *data, size_t length);
+
+/**
  * @brief Reads the next token, including indentation markers when needed.
  *
  * @param token Destination for the next token; must not be NULL.
@@ -140,7 +150,8 @@ int get_next_token(Token *token);
 /**
  * @brief Releases the scanner's lexeme buffer and indentation stack.
  *
- * @note Does not free returned token attributes or close the input stream.
+ * @note Does not free returned token attributes or the input memory buffer,
+ *       and does not close the input stream.
  * @note May be called after successful scanning or after an error.
  * @note Repeated calls are safe.
  */

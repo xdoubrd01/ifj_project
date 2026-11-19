@@ -34,6 +34,12 @@ typedef struct {
 static FILE         *source = NULL;
 static DynamicString buffer;
 
+/* Memory input is borrowed from the caller, just like the stream. */
+static const unsigned char *memory_source = NULL;
+static size_t memory_length = 0;
+static size_t memory_position = 0;
+static bool use_memory_source = false;
+
 /* Only one scanner instance is active at a time. */
 static size_t *indent_stack        = NULL;
 static size_t  indent_capacity     = 0;
@@ -65,12 +71,27 @@ static bool is_letter(int c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <
  */
 static bool is_name_char(int c) { return is_letter(c) || is_digit(c) || c == '_'; }
 
-/**
- * @brief Reads buffered lookahead first, then the caller-owned stream.
- */
+/** @brief Checks whether a stream or a valid memory input was selected. */
+static bool has_input(void) {
+    if (use_memory_source) {
+        return memory_source != NULL || memory_length == 0;
+    }
+
+    return source != NULL;
+}
+
+/** @brief Reads pushback first, then the selected input source. */
 static int read_char(void) {
     if (pushed_count > 0) {
         return pushed_chars[--pushed_count];
+    }
+
+    if (use_memory_source) {
+        if (memory_position == memory_length) {
+            return EOF;
+        }
+
+        return memory_source[memory_position++];
     }
 
     return fgetc(source);
@@ -1154,7 +1175,7 @@ static int read_at_main(Token *token) {
  * také vlastnictví paměti identifikátorů a řetězců.
  */
 static int scan_next(Token *token) {
-    if (source == NULL || token == NULL) {
+    if (!has_input() || token == NULL) {
         return 99;
     }
 
@@ -1449,6 +1470,15 @@ void scanner_init(FILE *source_file) {
     source = source_file;
 }
 
+void scanner_init_buffer(const char *data, size_t length) {
+    scanner_free();
+
+    memory_source = (const unsigned char *)data;
+    memory_length = length;
+    memory_position = 0;
+    use_memory_source = true;
+}
+
 /**
  * @brief Returns one token and records skipped physical line breaks.
  *
@@ -1465,7 +1495,7 @@ void scanner_init(FILE *source_file) {
  * také vlastnictví paměti identifikátorů a řetězců.
  */
 int get_next_token(Token *token) {
-    if (source == NULL || token == NULL) {
+    if (!has_input() || token == NULL) {
         return 99;
     }
 
@@ -1483,7 +1513,7 @@ int get_next_token(Token *token) {
     int rc = scan_next(token);
 
     /* A failed stream read must not be mistaken for a normal EOF. */
-    if (ferror(source)) {
+    if (source != NULL && ferror(source)) {
         if (rc == 0 && (token->type == TOKEN_IDENTIFIER || token->type == TOKEN_STRING_LITERAL)) {
             free(token->attribute.s_val);
             token->attribute.s_val = NULL;
@@ -1529,4 +1559,8 @@ void scanner_free(void) {
     skipped_newline     = false;
     pushed_count        = 0;
     source              = NULL;
+    memory_source       = NULL;
+    memory_length       = 0;
+    memory_position     = 0;
+    use_memory_source   = false;
 }
