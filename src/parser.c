@@ -614,13 +614,18 @@ static void parse_stmt_tail(void){
     else syntax_error();
 }
 
-static void parse_stmt_tail_id(void){
+static void parse_stmt_tail_id(char *var_name){
 if(tok.type == TOKEN_ASSIGN){
     advance();
 
     ExprNode *expr = NULL;
-    parse_call_or_exp(&expr);
+    data_type expr_type = parse_call_or_exp(&expr);
+
+    (void)var_name;
+    (void)expr_type;
+
     expr_free(expr);
+    
 }
 
 else if(tok.type == TOKEN_LPAREN){
@@ -733,7 +738,6 @@ static void parse_stmt(void) {
         expect(TOKEN_IDENTIFIER);
         data_type var_type = parse_opt_type();
         expect(TOKEN_ASSIGN);
-
         ExprNode *expr = NULL;
         data_type expr_type = parse_call_or_exp(&expr);
         expr_free(expr);
@@ -779,8 +783,12 @@ static void parse_stmt(void) {
     }
 
     else if(tok.type == TOKEN_IDENTIFIER){
+        char *var_name = strdup(tok.attribute.s_val);
+        if (var_name == NULL) exit(99);
+
         advance();
-        parse_stmt_tail_id();
+        parse_stmt_tail_id(var_name);
+        free(var_name);
     }
 
     else if(is_non_id_expression(tok.type) == 1){
