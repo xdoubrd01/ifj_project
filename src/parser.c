@@ -620,6 +620,8 @@ if(tok.type == TOKEN_ASSIGN){
 
     ExprNode *expr = NULL;
     parse_call_or_exp(&expr);
+    // TODO: gen_var_assign needs val/var name
+    // gen_var_assign(ts, NULL, expr->type, expr);
     expr_free(expr);
 }
 
@@ -736,14 +738,16 @@ static void parse_stmt(void) {
 
         ExprNode *expr = NULL;
         data_type expr_type = parse_call_or_exp(&expr);
-        expr_free(expr);
 
         int rc = sem_declare_variable(ts, var_name, var_type, expr_type, is_var, NULL);
-
+        
         if (rc != 0) {
             free(var_name);
             exit(rc);
         }
+
+        gen_def_var(ts, var_name, var_type, expr);
+        expr_free(expr);
 
         free(var_name);  
         parse_stmt_tail();
