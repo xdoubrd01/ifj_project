@@ -640,6 +640,25 @@ void process_expr_node(ExprNode *node) {
     }
 }
 
+
+// -----    variable related functions      -----
+
+// AI ASSISTED START
+void gen_var_assign(SymTable *ts, char *var_name, data_type var_type, ExprNode *node) {
+    symbol_data *var_data = symtable_search_var(ts, var_name);
+    unsigned var_id =  var_data->data.var.id;
+
+    process_expr_node(node);
+
+    // Implicitná konverzia Int -> Double na vrchole dátového zásobníka
+    if (var_type == type_double && node->type == type_int) {
+        gen_inst0("INT2FLOATS");
+    }
+
+    // Uloženie výsledku zo zásobníka do premennej v LF (bez DEFVAR)
+    buffer_append_format(code_buff, "POPS LF@%u\n", var_data->data.var.id);
+}
+
 void gen_def_var(SymTable *ts, char *var_name, data_type var_type, ExprNode *node) {
     symbol_data *var_data = symtable_search_var(ts, var_name);
     unsigned var_id =  var_data->data.var.id;
@@ -647,7 +666,7 @@ void gen_def_var(SymTable *ts, char *var_name, data_type var_type, ExprNode *nod
     printf("DEFVAR LF@%u\n", var_id);
 
     if (node != NULL) {
-        process_expr_node(node);
-        buffer_append_format(code_buff, "POPS LF@%u\n", var_id);
+        gen_var_assign(ts, var_name, var_type, node);
     }
 }
+// AI ASSISTED END
