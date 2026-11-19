@@ -421,8 +421,6 @@ void gen_func_start(SymTable *table, char *func_name, data_type ret_type) {
     current_func_ret_type = ret_type;
 
     printf("LABEL $%s\n", func_name);
-    printf("DEFVAR LF@%retval\n");
-    printf("MOVE LF@%retval nil@nil\n");
 
     symbol_data *func_data = symtable_search_func(table, func_name);
     size_t param_count = func_data->data.func.param_count;
@@ -455,12 +453,9 @@ void gen_func_end(void) {
     buffer_append_format(code_buff, "LABEL $%s$end\n", current_func_name);
 
     if (current_func_ret_type == type_unit) {
-        buffer_append_string(code_buff, "MOVE LF@%retval nil@nil\n");
+        buffer_append_string(code_buff, "PUSHS nil@nil\n");
     }
 
-    buffer_append_string(code_buff, "POPS LF@%retval\n");
-    gen_inst0("CLEARS");
-    // Presunie aktuálny LF zo zásobníka rámcov do TF (odkiaľ si volajúci vyzdvihne TF@%retval)
     gen_inst0("POPFRAME");
     // Návrat na inštrukciu za CALL
     gen_inst0("RETURN");
