@@ -1,0 +1,12 @@
+{
+  "name": "main_parameter",
+  "group": "arguments",
+  "status": "FAIL",
+  "phase": "compile",
+  "reason": "Překladač: očekáván kód 5, vrácen 0.",
+  "seconds": 0.0030625389990746044,
+  "expected_compile_rc": 5,
+  "compile_rc": 0,
+  "expected_runtime_rc": 0,
+  "runtime_rc": null
+}

@@ -1,0 +1,12 @@
+{
+  "name": "missing_assignment",
+  "group": "syntax",
+  "status": "PASS",
+  "phase": "compile",
+  "reason": "Správný chybový kód překladače.",
+  "seconds": 0.0032823529982124455,
+  "expected_compile_rc": 2,
+  "compile_rc": 2,
+  "expected_runtime_rc": 0,
+  "runtime_rc": null
+}

@@ -1,0 +1,10 @@
+import ifj26.*
+@main def run(): Unit =
+    val a = strLength("abcd")
+    val b = subStr("abcd", 1, 3)
+    val c = ord("ABC", 1)
+    val d = chr(65)
+    print(a)
+    print(b)
+    print(c)
+    print(d)

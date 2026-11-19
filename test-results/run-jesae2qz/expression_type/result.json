@@ -1,0 +1,12 @@
+{
+  "name": "expression_type",
+  "group": "types",
+  "status": "PASS",
+  "phase": "compile",
+  "reason": "Správný chybový kód překladače.",
+  "seconds": 0.002977626001666067,
+  "expected_compile_rc": 6,
+  "compile_rc": 6,
+  "expected_runtime_rc": 0,
+  "runtime_rc": null
+}

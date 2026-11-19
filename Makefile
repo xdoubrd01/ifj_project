@@ -27,3 +27,11 @@ clean:
 	rm -f $(TARGET)
 
 -include $(DEPS)
+
+.PHONY: test test-full
+
+test: all
+	bash test_parser.sh
+
+test-full: all
+	python3 test_ifj26.py --compiler ./$(TARGET)

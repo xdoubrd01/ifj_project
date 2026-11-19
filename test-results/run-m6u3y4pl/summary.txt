@@ -1,0 +1,23 @@
+Celkem: 56 | PASS: 24 | FAIL: 7 | PARTIAL: 25
+arguments       PASS= 2 FAIL= 1 PARTIAL= 0
+builtins        PASS= 0 FAIL= 0 PARTIAL= 1
+control         PASS= 0 FAIL= 0 PARTIAL= 1
+expressions     PASS= 0 FAIL= 0 PARTIAL= 4
+functions       PASS= 0 FAIL= 0 PARTIAL= 2
+immutable       PASS= 2 FAIL= 0 PARTIAL= 0
+input           PASS= 0 FAIL= 0 PARTIAL= 3
+layout          PASS= 0 FAIL= 2 PARTIAL= 2
+lexical         PASS= 7 FAIL= 0 PARTIAL= 0
+numbers         PASS= 0 FAIL= 0 PARTIAL= 2
+output          PASS= 0 FAIL= 0 PARTIAL= 3
+redefinition    PASS= 2 FAIL= 0 PARTIAL= 0
+runtime         PASS= 0 FAIL= 0 PARTIAL= 2
+scopes          PASS= 0 FAIL= 2 PARTIAL= 0
+strings         PASS= 0 FAIL= 0 PARTIAL= 4
+syntax          PASS= 5 FAIL= 0 PARTIAL= 0
+types           PASS= 3 FAIL= 2 PARTIAL= 0
+undefined       PASS= 3 FAIL= 0 PARTIAL= 0
+variables       PASS= 0 FAIL= 0 PARTIAL= 1
+Selhání podle fáze: compile=7
+Běh části programů nebyl ověřen. PARTIAL není úspěšný end-to-end test.
+Jde o regresní sadu, nikoli důkaz úplné správnosti ani odhad bodového hodnocení.

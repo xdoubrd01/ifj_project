@@ -1,0 +1,4 @@
+Celkem: 3 | PASS: 0 | FAIL: 0 | PARTIAL: 3
+output          PASS= 0 FAIL= 0 PARTIAL= 3
+Běh části programů nebyl ověřen. PARTIAL není úspěšný end-to-end test.
+Jde o regresní sadu, nikoli důkaz úplné správnosti ani odhad bodového hodnocení.

@@ -1,0 +1,4 @@
+Celkem: 3 | PASS: 2 | FAIL: 1 | PARTIAL: 0
+arguments       PASS= 2 FAIL= 1 PARTIAL= 0
+Selhání podle fáze: compile=1
+Jde o regresní sadu, nikoli důkaz úplné správnosti ani odhad bodového hodnocení.

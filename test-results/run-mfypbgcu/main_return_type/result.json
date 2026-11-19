@@ -1,0 +1,12 @@
+{
+  "name": "main_return_type",
+  "group": "types",
+  "status": "FAIL",
+  "phase": "compile",
+  "reason": "Překladač: očekáván kód 6, vrácen 0.",
+  "seconds": 0.0034930149995489046,
+  "expected_compile_rc": 6,
+  "compile_rc": 0,
+  "expected_runtime_rc": 0,
+  "runtime_rc": null
+}

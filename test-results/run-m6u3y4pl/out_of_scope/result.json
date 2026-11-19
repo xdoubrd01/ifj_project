@@ -1,0 +1,12 @@
+{
+  "name": "out_of_scope",
+  "group": "scopes",
+  "status": "FAIL",
+  "phase": "compile",
+  "reason": "Překladač: očekáván kód 3, vrácen 0.",
+  "seconds": 0.0030337110001710244,
+  "expected_compile_rc": 3,
+  "compile_rc": 0,
+  "expected_runtime_rc": 0,
+  "runtime_rc": null
+}

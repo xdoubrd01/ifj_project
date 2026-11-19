@@ -1,0 +1,27 @@
+{
+  "compiler": [
+    "/home/elias/ifj_project/ifj26"
+  ],
+  "interpreter": null,
+  "timeout": 5.0,
+  "strict_leading_zeros": false,
+  "counts": {
+    "PASS": 1,
+    "FAIL": 0,
+    "PARTIAL": 0
+  },
+  "results": [
+    {
+      "name": "out_of_scope",
+      "group": "scopes",
+      "status": "PASS",
+      "phase": "compile",
+      "reason": "Správný chybový kód překladače.",
+      "seconds": 0.0014462479994108435,
+      "expected_compile_rc": 3,
+      "compile_rc": 3,
+      "expected_runtime_rc": 0,
+      "runtime_rc": null
+    }
+  ]
+}

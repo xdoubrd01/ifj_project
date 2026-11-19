@@ -1,0 +1,12 @@
+{
+  "name": "unclosed_string",
+  "group": "lexical",
+  "status": "PASS",
+  "phase": "compile",
+  "reason": "Správný chybový kód překladače.",
+  "seconds": 0.0018225189996883273,
+  "expected_compile_rc": 1,
+  "compile_rc": 1,
+  "expected_runtime_rc": 0,
+  "runtime_rc": null
+}

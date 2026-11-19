@@ -1,0 +1,12 @@
+{
+  "name": "multiline_argument",
+  "group": "layout",
+  "status": "FAIL",
+  "phase": "compile",
+  "reason": "Překladač: očekáván kód 0, vrácen 2.",
+  "seconds": 0.0034200039990537334,
+  "expected_compile_rc": 0,
+  "compile_rc": 2,
+  "expected_runtime_rc": 0,
+  "runtime_rc": null
+}

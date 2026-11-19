@@ -1,0 +1,12 @@
+{
+  "name": "multiline_literal",
+  "group": "strings",
+  "status": "PARTIAL",
+  "phase": "not_run",
+  "reason": "Překlad prošel; běh a výstup bez interpretu neověřeny.",
+  "seconds": 0.0032517729996470734,
+  "expected_compile_rc": 0,
+  "compile_rc": 0,
+  "expected_runtime_rc": 0,
+  "runtime_rc": null
+}

@@ -1,0 +1,12 @@
+{
+  "name": "duplicate_function",
+  "group": "redefinition",
+  "status": "PASS",
+  "phase": "compile",
+  "reason": "Správný chybový kód překladače.",
+  "seconds": 0.00269144000048982,
+  "expected_compile_rc": 4,
+  "compile_rc": 4,
+  "expected_runtime_rc": 0,
+  "runtime_rc": null
+}
