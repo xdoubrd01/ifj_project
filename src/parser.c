@@ -9,7 +9,6 @@
 #include "symtable.h"
 #include "exp_parser.h"
 #include "semantic.h"
-#include "code_generator.c"
 #include "exp_parser.h"
 #include "semantic.h"
 
@@ -24,6 +23,59 @@ typedef enum {
     FIRST_ROUND,
     SECOND_ROUND
 } ParserRound;
+
+
+/*
+ * AI-generated segment (Claude), prompt: "vygeneruj mi kostru vsech funkci
+ * pravidel" (skeleton only: one empty function per grammar rule written by
+ * the author; the bodies are to be implemented by the author).
+ */
+
+// Deklarace internich funkci parseru (implementace jsou nize).
+// Prace s tokeny
+static void advance(void);
+static void expect(TokenType type);
+static TokenType peek_token(void);
+
+// Program a funkce
+static void parse_prolog(void);
+static void parse_program(ParserRound round);
+static void parse_functions(ParserRound round);
+static void parse_function(ParserRound round);
+static void parse_opt_annotation(void);
+static void parse_opt_eol(void);
+static void parse_function_body(void);
+static void skip_function_body(void);
+
+// Parametry, typy a pomocna pole
+static void append_param(data_type **types, size_t *count, data_type type);
+static void append_param_name(char ***names, size_t count, char *name);
+static data_type parse_parameters_start(char **out_name);
+static void parse_parameters_tail(data_type **types, char ***names, size_t *count);
+static void parse_parameters_list(data_type **types, char ***names, size_t *count);
+static data_type parse_type(void);
+static data_type parse_opt_type(void);
+static data_type parse_opt_return_type(void);
+
+// Bloky, prikazy a navratove hodnoty
+static void parse_block(void);
+static void parse_stmts(void);
+static void parse_stmt(void);
+static void parse_stmt_tail(void);
+static void parse_stmt_tail_id(char *var_name);
+static void parse_opt_return_tail(void);
+static int is_stmt_start(TokenType t);
+
+// Vyrazy a volani funkci
+static void parse_term(void);
+static void parse_expr_tail(void);
+static void parse_call_arguments_tail(void);
+static void parse_call_arguments(void);
+static void parse_non_id_expression(void);
+static int is_non_id_expression(TokenType t);
+static data_type parse_function_call(void);
+static data_type parse_call_or_exp(ExprNode **out_expr);
+static ExprNode *parse_expression_wrapper(void);
 
 
 // Pri posunu nejdriv uvolnime text stareho tokenu.
@@ -80,28 +132,6 @@ static void parse_prolog(void) {
         syntax_error();
     }
 }
-
-/*
- * AI-generated segment (Claude), prompt: "vygeneruj mi kostru vsech funkci
- * pravidel" (skeleton only: one empty function per grammar rule written by
- * the author; the bodies are to be implemented by the author).
- *
- */
-
-// Deklarace funkci parseru.
-
-static void parse_prolog(void);
-static void parse_functions(ParserRound round);
-static void parse_opt_annotation(void);
-static void parse_opt_eol(void);
-static void parse_function(ParserRound round);
-static void parse_block(void);
-static data_type parse_type(void);
-static void parse_stmts(void);
-static void parse_stmt(void);
-static data_type parse_opt_type(void);
-static void parse_function_body(void);
-static ExprNode *parse_expression_wrapper(void);
 
 // Nacte dalsi token dopredu, ale zatim ho nepreda jako aktualni.
 static TokenType peek_token(void){
