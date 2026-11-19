@@ -1,3 +1,7 @@
+// Project:    IFJ26
+// Filename:   exp_parser.h
+// Author:     Jakub Grásgruber <xgrasgj00>
+
 /*
  * exp_parser.h - precedence parser of expressions
  *

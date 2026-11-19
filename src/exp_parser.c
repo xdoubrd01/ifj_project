@@ -1,3 +1,7 @@
+// Project:    IFJ26
+// Filename:   exp_parser.c
+// Author:     Jakub Grásgruber <xgrasgj00>
+
 /*
  * exp_parser.c - precedence parser of expressions, builds a typed expression
  *                tree (expr_tree.h) for the code generator

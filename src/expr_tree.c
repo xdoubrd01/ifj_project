@@ -1,3 +1,7 @@
+// Project:    IFJ26
+// Filename:   expr_tree.c
+// Author:     Jakub Grásgruber <xgrasgj00>
+
 /*
  * expr_tree.c - helper functions for the expression tree (see expr_tree.h)
  *

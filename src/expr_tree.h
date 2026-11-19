@@ -1,3 +1,7 @@
+// Project:    IFJ26
+// Filename:   expr_tree.h
+// Author:     Jakub Grásgruber <xgrasgj00>
+
 /*
  * expr_tree.h - typed expression tree, interface between the expression
  *               parser (exp_parser.c), semantics (semantic.c) and the code
