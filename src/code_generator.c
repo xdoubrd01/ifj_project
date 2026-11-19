@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include "symtable.h"
 #include "expr_tree.h"
+#include "code_buffer.h"
 
 typedef struct {
     int cnt;       // celkový počet doteraz videných ifov (1, 2, 3...)
@@ -365,6 +366,8 @@ void gen_func_return(ExprNode *ret_expr) {
 }
 
 // TODO: pridat osetrenie pre 'return func()'
+// mozne riesenie vraciat hodnotu na vrchu zasobniku -> vyraz z volanej funkcie pomocou return bude automaticky na vrchu ->
+// podporovane rozsirenie FUNEX
 void gen_func_end(void) {
     printf("LABEL $%s$end\n", current_func_name);
 
