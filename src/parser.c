@@ -5,9 +5,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include "symtable.h"
-#include "../parser_semantics/exp_parser.h"
-#include "../parser_semantics/semantic.h"
+#include "exp_parser.h"
+#include "semantic.h"
+#include "code_generator.h"
 
+// Aktualni token a pripadny prednacteny token ze scanneru.
 static Token tok; // current token
 static Token lookahead;
 static bool has_lookahead = false;
@@ -19,6 +21,8 @@ typedef enum {
 } ParserRound;
 
 
+// Pri posunu nejdriv uvolnime text stareho tokenu.
+// Pokud uz jsme token nacetli pres peek_token(), pouzijeme ho.
 static void advance(void) {
     
     if (tok.type == TOKEN_IDENTIFIER ||
@@ -26,12 +30,12 @@ static void advance(void) {
         free(tok.attribute.s_val);
     }
 
-    // Pokud už máme načtený další token
+    // Uz prednacteny token
     if (has_lookahead) {
         tok = lookahead;
         has_lookahead = false;
     }
-    // Jinak načteme nový token ze scanneru
+    // Jinak cteme primo ze scanneru
     else {
         int rc = get_next_token(&tok);
 
@@ -41,6 +45,7 @@ static void advance(void) {
     }
 }
 
+
 _Noreturn void syntax_error(void) {
     fprintf(stderr, "Syntax error: unexpected token: %d\n", tok.type);
 
@@ -48,14 +53,14 @@ _Noreturn void syntax_error(void) {
     
 }
 
+
 static void expect(TokenType type) {
     if (tok.type != type) {
         syntax_error();
-        scanner_free();
-        exit(2);
     }
     advance();
 }
+
 
 static void parse_prolog(void) {
     expect(TOKEN_KW_IMPORT);
@@ -76,11 +81,9 @@ static void parse_prolog(void) {
  * pravidel" (skeleton only: one empty function per grammar rule written by
  * the author; the bodies are to be implemented by the author).
  *
- * Paste below your existing static helpers (advance, expect, syntax_error)
- * and keep your own parse_prolog().
  */
 
-/* ---- forward declarations (one function per non-terminal) ---- */
+// Deklarace funkci parseru.
 
 static void parse_prolog(void);
 static void parse_functions(ParserRound round);
@@ -95,6 +98,7 @@ static data_type parse_opt_type(void);
 static void parse_function_body(void);
 static ExprNode *parse_expression_wrapper(void);
 
+// Nacte dalsi token dopredu, ale zatim ho nepreda jako aktualni.
 static TokenType peek_token(void){
     if (has_lookahead == false){
         int succes = get_next_token(&lookahead);
@@ -106,12 +110,16 @@ static TokenType peek_token(void){
     return lookahead.type;
 }
 
+
 static void parse_program(ParserRound round) {
     parse_prolog();
     parse_functions(round);
     expect(TOKEN_EOF);
 }
 
+// Prvni pruchod si ulozi hlavicky funkci, aby slo volat i funkce
+// definovane az pozdeji. Ve druhem se zpracovavaji jejich tela.
+// source musi jit vratit na zacatek pomoci rewind().
 void parse(FILE *source) {
     ts = symtable_create(0);
     if(ts == NULL) exit(99);
@@ -120,28 +128,30 @@ void parse(FILE *source) {
         exit(99);
     }
 
-    //first round
+    // prvni pruchod
     scanner_init(source);
     advance();
     parse_program(FIRST_ROUND);
 
-    // second round preparation
+    // priprava na druhy pruchod
     if (has_lookahead) {
         if (lookahead.type == TOKEN_IDENTIFIER ||lookahead.type == TOKEN_STRING_LITERAL) {
             free(lookahead.attribute.s_val);
         }
         has_lookahead = false;
     }
+    // Tabulku symbolu nechavame pro druhy pruchod.
     scanner_free();
     rewind(source);
     scanner_init(source);
 
-    //second round
+    // druhy pruchod
     advance();
     parse_program(SECOND_ROUND);
     
     scanner_free();
 }
+
 
 static void parse_functions(ParserRound round) {
     while(tok.type == TOKEN_EOL){
@@ -153,6 +163,7 @@ static void parse_functions(ParserRound round) {
     parse_functions(round);
     }
 }
+
 
 static void parse_opt_annotation(void) {
     if (tok.type == TOKEN_AT_MAIN){
@@ -187,6 +198,7 @@ static void append_param(data_type **types, size_t *count, data_type type) {
     (*count)++;
 }
 
+// count uz pocita i nove pridavane jmeno.
 static void append_param_name(char ***names, size_t count, char *name) {
     char **tmp = realloc(*names, count * sizeof(char *));
 
@@ -199,6 +211,8 @@ static void append_param_name(char ***names, size_t count, char *name) {
     (*names)[count - 1] = name;
 }
 
+// Jmeno parametru kopirujeme, protoze text aktualniho tokenu
+// se pri advance() uvolni. Kopii potom prevezme volajici.
 static data_type parse_parameters_start(char **out_name){
 
     if (tok.type != TOKEN_IDENTIFIER) {
@@ -225,6 +239,7 @@ static data_type parse_parameters_start(char **out_name){
     return param_type;
 }
 
+
 static void parse_parameters_tail(
     data_type **types,
     char ***names,
@@ -243,6 +258,7 @@ static void parse_parameters_tail(
     }
 }
 
+
 static void parse_parameters_list(
     data_type **types,
     char ***names,
@@ -259,6 +275,7 @@ static void parse_parameters_list(
     }
 }
 
+
 static data_type parse_opt_return_type(void){
     if(tok.type == TOKEN_COLON){
         advance();
@@ -270,6 +287,8 @@ static data_type parse_opt_return_type(void){
     return type_unknown;
 }
 
+// V prvnim pruchodu preskocime telo. U vice radku sledujeme
+// zanoreni, aby nas nezastavil DEDENT vnitrniho bloku.
 static void skip_function_body(void){
     if(tok.type == TOKEN_EOL){
         int depth = 0;
@@ -297,6 +316,8 @@ static void skip_function_body(void){
 }
 
 
+// V obou pruchodech nacteme hlavicku funkce, ale registrujeme ji
+// jen v prvnim. Jeji telo se kontroluje az ve druhem.
 static void parse_function(ParserRound round) {
     parse_opt_annotation();
     expect(TOKEN_KW_DEF);
@@ -344,9 +365,10 @@ static void parse_function(ParserRound round) {
             exit(4);
         }
 
+        // Jmena musi byt ve stejnem poradi jako typy parametru.
         if (!symtable_set_func_param_names(ts,func_name,param_count,(const char *const *)param_names)) {
-        exit(99);
-}
+            exit(99);
+        }
     }
     expect(TOKEN_ASSIGN);
 
@@ -355,16 +377,25 @@ static void parse_function(ParserRound round) {
     }
 
     else{
+<<<<<<< HEAD
+        // TODO: Connect function generation when gen_func_start() is implemented.
+=======
+        gen_func_start(ts, func_name, ret_type);
+>>>>>>> origin/code_gen
         parse_function_body();
+        gen_func_end();
     }
 
     symtable_leave_scope(ts);
 
+    // Tabulka symbolu si jmena kopiruje, docasne pole uz nepotrebujeme.
     for (size_t i = 0; i < param_count; i++) {
         free(param_names[i]);
-        }
+    }
 
     free(param_names);
+    free(param_types);
+    free(func_name);
 }
 
 /* 10. BLOCK -> INDENT STMT STMTS DEDENT */
@@ -452,15 +483,6 @@ static void parse_call_arguments(void){
     }
 }
 
-/*static void parse_call_or_exp_opt(void){
-    if(tok.type == TOKEN_LPAREN){
-        advance();
-        parse_call_arguments();
-        expect(TOKEN_RPAREN);
-    }
-    else parse_expr_tail();
-}*/
-
 static void parse_non_id_expression(void){
   if (tok.type == TOKEN_DOUBLE_LITERAL ||
         tok.type == TOKEN_STRING_LITERAL || tok.type == TOKEN_INT_LITERAL) {
@@ -480,13 +502,14 @@ static int is_non_id_expression(TokenType t){
 
 }
 
+// Kontrola poctu a typu argumentu oproti hlavicce funkce.
 static data_type parse_function_call(void) {
     if(tok.type == TOKEN_IDENTIFIER){
 
         char *function_name = strdup(tok.attribute.s_val);
         if (function_name == NULL) exit(99);
 
-            symbol_data *function = symtable_search_func(ts, function_name);
+        symbol_data *function = symtable_search_func(ts, function_name);
 
         if (function == NULL) {
             fprintf(stderr, "Undefined function: %s\n", function_name);
@@ -525,6 +548,8 @@ static data_type parse_function_call(void) {
                 ExprNode *arg = parse_expression_wrapper();
                 if (arg == NULL) exit(99);
 
+                // proccess argument expression, and push to stack
+                process_expr_node(arg);
                 
                 data_type type = arg->type;
                 expr_free(arg);
@@ -553,6 +578,8 @@ static data_type parse_function_call(void) {
 
             data_type return_type = function->data.func.ret_type;
 
+            gen_funct_call(function_name);
+
             free(function_name);
             return return_type;
         }                                 
@@ -562,6 +589,7 @@ static data_type parse_function_call(void) {
     }
 }
 
+// Volani funkce zatim resime zvlast, ostatni vyrazy pres precedencni parser.
 static data_type parse_call_or_exp(void) {
     if (tok.type == TOKEN_IDENTIFIER &&
         peek_token() == TOKEN_LPAREN) {
@@ -622,6 +650,8 @@ static data_type parse_opt_type(void) {
     }
 }
 
+// Precedencni parser potrebuje znat i pripadne prednacteny token.
+// Vraceny strom musi uvolnit ten, kdo funkci zavolal.
 static ExprNode *parse_expression_wrapper(void) {
     ExprNode *expr = NULL;
     int result;
@@ -644,13 +674,17 @@ static ExprNode *parse_expression_wrapper(void) {
 }
 
 static void parse_opt_return_tail(void){
-if(tok.type == TOKEN_EOL || tok.type == TOKEN_SEMICOL){
-    parse_stmt_tail();
-}
+    if(tok.type == TOKEN_EOL || tok.type == TOKEN_SEMICOL){
+        parse_stmt_tail();
+        gen_func_return(NULL);
+        // return bez expr
+    }
 
-else if(tok.type == TOKEN_IDENTIFIER || is_non_id_expression(tok.type) == 1){
-    parse_call_or_exp();
-    parse_stmt_tail();
+    else if(tok.type == TOKEN_IDENTIFIER || is_non_id_expression(tok.type) == 1){
+        parse_call_or_exp();
+        parse_stmt_tail();
+        // TODO: implementovat gen_func_return
+        //return s expr
     }
 }
 
@@ -675,19 +709,20 @@ static int is_stmt_start(TokenType t){
     }
 }
 
+
 static void parse_stmt(void) {
     if(tok.type == TOKEN_KW_VAR || tok.type == TOKEN_KW_VAL){
         bool is_var =(tok.type == TOKEN_KW_VAR);
         advance();
         if(tok.type != TOKEN_IDENTIFIER) syntax_error();
 
-        char *var_name = strdup(tok.attribute.s_val); //copies s_val into own memmory
+        char *var_name = strdup(tok.attribute.s_val); // vlastni kopie jmena pred advance()
 
         if(var_name == NULL) syntax_error();
         
         expect(TOKEN_IDENTIFIER);
         data_type var_type = parse_opt_type();
-
+        expect(TOKEN_ASSIGN);
         data_type expr_type = parse_call_or_exp();
         int rc = sem_declare_variable(ts, var_name, var_type, expr_type, is_var, NULL);
 
@@ -696,18 +731,18 @@ static void parse_stmt(void) {
             exit(rc);
         }
 
-        free(var_name);
-        expect(TOKEN_ASSIGN);    
+        free(var_name);  
         parse_stmt_tail();
     }
 
     else if(tok.type == TOKEN_KW_WHILE){
         advance();
-        parse_expression_wrapper();
+        ExprNode *expr = parse_expression_wrapper();    //free() may be needed?
         expect(TOKEN_KW_DO);
         expect(TOKEN_EOL);
+        gen_while_start(expr);
         parse_block();
-
+        gen_while_end();
     }
 
     else if(tok.type == TOKEN_KW_RETURN){
@@ -717,13 +752,16 @@ static void parse_stmt(void) {
 
     else if(tok.type == TOKEN_KW_IF){
         advance();
-        parse_expression_wrapper();
+        ExprNode *expr = parse_expression_wrapper();    //free() may be needed?
         expect(TOKEN_KW_THEN);
         expect(TOKEN_EOL);
+        gen_if_start(expr);
         parse_block();
         expect(TOKEN_KW_ELSE);
         expect(TOKEN_EOL);
+        gen_if_else();
         parse_block();
+        gen_if_end();
     }
 
     else if(tok.type == TOKEN_IDENTIFIER){
@@ -739,6 +777,7 @@ static void parse_stmt(void) {
     else syntax_error();
 
 }
+
 
 static void parse_stmts(void) {
     if(is_stmt_start(tok.type) == 1){
