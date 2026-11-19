@@ -657,7 +657,9 @@ void gen_var_assign(SymTable *ts, char *var_name, data_type var_type, ExprNode *
     symbol_data *var_data = symtable_search_var(ts, var_name);
     unsigned var_id =  var_data->data.var.id;
 
-    process_expr_node(node);
+    if(!node) {
+        process_expr_node(node);
+    }
 
     // Implicitná konverzia Int -> Double na vrchole dátového zásobníka
     if (var_type == type_double && node->type == type_int) {
