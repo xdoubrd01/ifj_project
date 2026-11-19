@@ -432,6 +432,8 @@ void gen_func_start(SymTable *table, char *func_name, data_type ret_type) {
     current_func_ret_type = ret_type;
 
     printf("LABEL $%s\n", func_name);
+    printf("CREATEFRAME\n");
+    printf("PUSHFRAME\n");
 
     symbol_data *func_data = symtable_search_func(table, func_name);
     if (func_data == NULL) {
@@ -444,8 +446,8 @@ void gen_func_start(SymTable *table, char *func_name, data_type ret_type) {
     for (size_t i = param_count; i > 0; i--) {
         symbol_data *var_data = symtable_search_var(table, func_data->data.func.param_names[i - 1]);
         if (var_data != NULL) {
-            buffer_append_format(code_buff, "DEFVAR LF@%u\n", var_data->data.var.id);
-            buffer_append_format(code_buff, "POPS LF@%u\n", var_data->data.var.id);
+            buffer_append_format(code_buff, "DEFVAR LF@v%u\n", var_data->data.var.id);
+            buffer_append_format(code_buff, "POPS LF@v%u\n", var_data->data.var.id);
         }
     }
 }
@@ -623,7 +625,7 @@ void process_expr_node(ExprNode *node) {
         break;
 
     case EXPR_VAR:
-        buffer_append_format(code_buff, "PUSHS LF@%s\n", node->u.var.id);
+        buffer_append_format(code_buff, "PUSHS LF@%u\n", node->u.var.id);
         break;
 
     case EXPR_NEG:
@@ -663,14 +665,14 @@ void gen_var_assign(SymTable *ts, char *var_name, data_type var_type, ExprNode *
     }
 
     // Uloženie výsledku zo zásobníka do premennej v LF (bez DEFVAR)
-    buffer_append_format(code_buff, "POPS LF@%u\n", var_id);
+    buffer_append_format(code_buff, "POPS LF@v%u\n", var_id);
 }
 
 void gen_def_var(SymTable *ts, char *var_name, data_type var_type, ExprNode *node) {
     symbol_data *var_data = symtable_search_var(ts, var_name);
     unsigned var_id =  var_data->data.var.id;
 
-    printf("DEFVAR LF@%u\n", var_id);
+    printf("DEFVAR LF@v%u\n", var_id);
 
     if (node != NULL) {
         gen_var_assign(ts, var_name, var_type, node);
