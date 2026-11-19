@@ -412,6 +412,8 @@ void code_gen_init(char *main_name) {
 
     buffer_append_format(&code_buff, "JUMP $%s\n", main_name);
 
+    gen_inst1("EXIT", "int@0");
+
     gen_builtin_print();
     gen_builtin_read_int();
     gen_builtin_read_double();
@@ -423,8 +425,6 @@ void code_gen_init(char *main_name) {
     gen_builtin_chr();
     gen_builtin_readLine();
     gen_builtin_toInt();
-
-    gen_inst1("EXIT", "int@0");
 
     buffer_flush(&code_buff);
 }
