@@ -10,7 +10,7 @@
 #include "code_generator.c"
 #include "exp_parser.h"
 #include "semantic.h"
-#include "code_generator.h"
+#include "code_generator.c"
 
 // Aktualni token a pripadny prednacteny token ze scanneru.
 static Token tok; // current token
