@@ -394,6 +394,11 @@ void code_gen_init(char *main_name) {
         exit(99);
     }
 
+    if (main_name == NULL) {
+        fprintf(stderr, "Internal error: missing entry function\n");
+        exit(99);
+    }
+
     if_counter.cnt = 0;
     if_counter.stack_top = 0;
     while_counter.cnt = 0;
@@ -405,7 +410,9 @@ void code_gen_init(char *main_name) {
     gen_inst1("DEFVAR", "GF@%tmp_op2");
     gen_inst1("DEFVAR", "GF@%tmp_res");
 
-    buffer_append_format(&code_buff, "JUMPI $%s\n", main_name);
+    buffer_append_format(&code_buff, "CALL $%s\n", main_name);
+
+    gen_inst1("EXIT", "int@0");
 
     gen_builtin_print();
     gen_builtin_read_int();
@@ -418,8 +425,6 @@ void code_gen_init(char *main_name) {
     gen_builtin_chr();
     gen_builtin_readLine();
     gen_builtin_toInt();
-
-    gen_inst1("EXIT", "int@0");
 
     buffer_flush(&code_buff);
 }
@@ -462,8 +467,11 @@ void gen_func_return(ExprNode *ret_expr) {
         process_expr_node(ret_expr);
 
         // Ak funkcia vracia Double a výraz bol Int, prevedieme ho
-        if (current_func_ret_type == type_double && ret_expr->type == EXPR_INT_LIT && ret_expr->type != EXPR_INT2FLOAT) {
+        if (current_func_ret_type == type_double && ret_expr->type == type_int) {
             gen_inst0("INT2FLOATS");
+        }
+        if (current_func_ret_type == type_unit) {
+            gen_inst1("POPS", "GF@%tmp_res");
         }
     }
     // Nepodmienený skok na spoločný epilóg funkcie, aby prebehol POPFRAME
