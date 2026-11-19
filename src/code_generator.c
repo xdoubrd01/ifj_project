@@ -626,7 +626,7 @@ void process_expr_node(ExprNode *node) {
         break;
 
     case EXPR_VAR:
-        buffer_append_format(&code_buff, "PUSHS LF@%u\n", node->u.var.id);
+        buffer_append_format(&code_buff, "PUSHS LF@v%u\n", node->u.var.id);
         break;
 
     case EXPR_NEG:
