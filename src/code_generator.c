@@ -437,8 +437,8 @@ void gen_func_start(SymTable *table, char *func_name, data_type ret_type) {
     for (size_t i = param_count; i > 0; i--) {
         symbol_data *var_data = symtable_search_var(table, func_data->data.func.param_names[i - 1]);
         if (var_data != NULL) {
-            buffer_append_format(code_buff, "DEFVAR LF@%s\n", var_data->data.var.id);
-            buffer_append_format(code_buff, "POPS LF@%s\n", var_data->data.var.id);
+            buffer_append_format(code_buff, "DEFVAR LF@%u\n", var_data->data.var.id);
+            buffer_append_format(code_buff, "POPS LF@%u\n", var_data->data.var.id);
         }
     }
 }
@@ -637,5 +637,17 @@ void process_expr_node(ExprNode *node) {
 
     default:
         break;
+    }
+}
+
+void gen_def_var(SymTable *ts, char *var_name, data_type var_type, ExprNode *node) {
+    symbol_data *var_data = symtable_search_var(ts, var_name);
+    unsigned var_id =  var_data->data.var.id;
+
+    printf("DEFVAR LF@%u\n", var_id);
+
+    if (node != NULL) {
+        process_expr_node(node);
+        buffer_append_format(code_buff, "POPS LF@%u\n", var_id);
     }
 }
