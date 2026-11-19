@@ -9,7 +9,6 @@
 #include "symtable.h"
 #include "exp_parser.h"
 #include "semantic.h"
-#include "code_generator.c"
 #include "exp_parser.h"
 #include "semantic.h"
 
