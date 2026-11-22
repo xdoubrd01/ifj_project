@@ -599,10 +599,11 @@ static int is_non_id_expression(TokenType t){
 
 // AI ASSISTED START
 // AI PROMPT:
-// Oprav parse_function_call() pro viceradkove argumenty, vcetne
-// koncove carky na samostatnem radku pred ')'. Zachovej kontrolu
-// poctu a typu argumentu a generovani kodu. Jednoradkovou
-// koncovou carku (napr. print("OK",)) odmitni.
+// Rozsir parse_function_call() o vnorena volani funkci v argumentech,
+// napr. print(answer()) a f(g(2)). Zachovej dosavadni podporu
+// viceradkovych argumentu, kontrolu koncove carky podle
+// newline_before, semantickou kontrolu typu a generovani argumentu.
+// Povol implicitni konverzi Int -> Double u argumentu.
 static data_type parse_function_call(void) {
     if (tok.type != TOKEN_IDENTIFIER) {
         syntax_error();
@@ -620,14 +621,22 @@ static data_type parse_function_call(void) {
 
     advance();
     expect(TOKEN_LPAREN);
-
-    // Uvnitr zavorek ignorujeme zalomeni radku a odsazeni.
     skip_call_layout();
 
     size_t arg_count = 0;
     while (tok.type != TOKEN_RPAREN) {
-        ExprNode *arg = parse_expression_wrapper();
-        if (arg == NULL) exit(99);
+        ExprNode *arg = NULL;
+        data_type arg_type;
+
+        // Vnorene volani se zpracuje rekurzivne a samo vlozi
+        // navratovou hodnotu na datovy zasobnik.
+        if (tok.type == TOKEN_IDENTIFIER && peek_token() == TOKEN_LPAREN) {
+            arg_type = parse_function_call();
+        } else {
+            arg = parse_expression_wrapper();
+            if (arg == NULL) exit(99);
+            arg_type = arg->type;
+        }
 
         if (arg_count >= function->data.func.param_count) {
             expr_free(arg);
@@ -636,16 +645,25 @@ static data_type parse_function_call(void) {
         }
 
         data_type expected_type = function->data.func.params[arg_count];
-        if (expected_type != type_any && arg->type != expected_type) {
+        if (expected_type != type_any && arg_type != expected_type &&
+            !(expected_type == type_double && arg_type == type_int)) {
             expr_free(arg);
             free(function_name);
             exit(5);
         }
 
-        process_expr_node(arg);
-        expr_free(arg);
-        arg_count++;
+        // Bezny vyraz musi vygenerovat kod; vnorene volani uz
+        // provedlo gen_funct_call() a hodnotu ma na zasobniku.
+        if (arg != NULL) {
+            process_expr_node(arg);
+            expr_free(arg);
+        }
 
+        if (expected_type == type_double && arg_type == type_int) {
+            gen_inst0("INT2FLOATS");
+        }
+
+        arg_count++;
         skip_call_layout();
         if (tok.type != TOKEN_COMMA) {
             break;
@@ -654,8 +672,8 @@ static data_type parse_function_call(void) {
         advance();
         skip_call_layout();
 
-        // Scanner potlacuje EOL uvnitr zavorek. newline_before
-        // oznacuje fyzicky novy radek pred uzaviraci zavorkou.
+        // Scanner potlacuje EOL uvnitr zavorek; fyzicke zalomeni
+        // radku pred ')' je dostupne v tok.newline_before.
         if (tok.type == TOKEN_RPAREN) {
             if (!tok.newline_before) {
                 free(function_name);
