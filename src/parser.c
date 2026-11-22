@@ -733,8 +733,12 @@ if (tok.type == TOKEN_ASSIGN) {
     }
 
     else {
+        if (var_type == type_double && expr_type == type_int) {
+            gen_inst0("INT2FLOATS");
+        }
+
         gen_var_assign(ts, var_name, var_type, NULL);
-    }
+        }
 
     expr_free(expr);
 }
@@ -811,6 +815,10 @@ static void parse_opt_return_tail(void) {
             expr_free(expr);
             exit(6);
         }
+        
+         if (expr == NULL && current_return_type == type_double && expr_type == type_int) {
+            gen_inst0("INT2FLOATS");
+        }
 
         gen_func_return(expr);
         expr_free(expr);
@@ -842,8 +850,13 @@ static void parse_function_body(void){
 
     if (expr != NULL) {
         gen_func_return(expr);
+
     } else {
-         gen_func_return(NULL);
+        if(expr_type == type_int && current_return_type == type_double){
+            gen_inst0("INT2FLOATS");
+        }
+
+        gen_func_return(NULL);
     }
 
     expr_free(expr);
@@ -889,7 +902,13 @@ static void parse_stmt(void) {
         } 
         else {
             gen_def_var(ts, var_name, var_type, NULL);
+
+            if (var_type == type_double && expr_type == type_int) {
+                gen_inst0("INT2FLOATS");
+            }
+
             gen_var_assign(ts, var_name, var_type, NULL);
+
         }
 
 

@@ -671,14 +671,10 @@ void gen_var_assign(SymTable *ts, char *var_name, data_type var_type, ExprNode *
     if(node) { // opravil jsem obracenou podminku, node se zavola kdyz vyrazovy strom existuje
         process_expr_node(node);
 
+        // Implicitná konverzia Int -> Double na vrchole dátového zásobníka
         if (var_type == type_double && node->type == type_int) {
             gen_inst0("INT2FLOATS");
         }
-    }
-
-    // Implicitná konverzia Int -> Double na vrchole dátového zásobníka
-    if (var_type == type_double && node->type == type_int) {
-        gen_inst0("INT2FLOATS");
     }
 
     // Uloženie výsledku zo zásobníka do premennej v LF (bez DEFVAR)
