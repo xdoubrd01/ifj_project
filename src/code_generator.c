@@ -685,7 +685,7 @@ void gen_def_var(SymTable *ts, char *var_name, data_type var_type, ExprNode *nod
     symbol_data *var_data = symtable_search_var(ts, var_name);
     unsigned var_id =  var_data->data.var.id;
 
-    buffer_append_format(&code_buff, "DEFVAR LF@v%u\n", var_id);
+    printf("DEFVAR LF@v%u\n", var_id);
 
     if (node != NULL) {
         gen_var_assign(ts, var_name, var_type, node);
