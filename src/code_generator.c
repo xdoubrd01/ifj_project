@@ -670,6 +670,10 @@ void gen_var_assign(SymTable *ts, char *var_name, data_type var_type, ExprNode *
 
     if(node) { // opravil jsem obracenou podminku, node se zavola kdyz vyrazovy strom existuje
         process_expr_node(node);
+
+        if (var_type == type_double && node->type == type_int) {
+            gen_inst0("INT2FLOATS");
+        }
     }
 
     // Implicitná konverzia Int -> Double na vrchole dátového zásobníka
@@ -685,7 +689,7 @@ void gen_def_var(SymTable *ts, char *var_name, data_type var_type, ExprNode *nod
     symbol_data *var_data = symtable_search_var(ts, var_name);
     unsigned var_id =  var_data->data.var.id;
 
-    buffer_append_format(&code_buff, "DEFVAR LF@v%u\n", var_id);
+    printf("DEFVAR LF@v%u\n", var_id);
 
     if (node != NULL) {
         gen_var_assign(ts, var_name, var_type, node);
