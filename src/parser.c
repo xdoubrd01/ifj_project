@@ -730,11 +730,10 @@ if (tok.type == TOKEN_ASSIGN) {
 
     if (expr != NULL) {
         gen_var_assign(ts, var_name, var_type, expr);
+    }
 
-    } else {
-        // TODO: prirazeni vysledku volani funkce
-        // parse_call_or_exp() uz v tomto pripade generoval CALL.
-        // Zde je potreba ulozit navratovou hodnotu do promenne.
+    else {
+        gen_var_assign(ts, var_name, var_type, NULL);
     }
 
     expr_free(expr);
@@ -840,6 +839,13 @@ static void parse_function_body(void){
         exit(6);
     }
 
+
+    if (expr != NULL) {
+        gen_func_return(expr);
+    } else {
+         gen_func_return(NULL);
+    }
+
     expr_free(expr);
     expect(TOKEN_EOL);
     }
@@ -877,13 +883,16 @@ static void parse_stmt(void) {
             free(var_name);
             exit(rc);
         }
-        if(expr != NULL){
-        gen_def_var(ts, var_name, var_type, expr);
 
+        if (expr != NULL) {
+            gen_def_var(ts, var_name, var_type, expr);
+        } 
+        else {
+            gen_def_var(ts, var_name, var_type, NULL);
+            gen_var_assign(ts, var_name, var_type, NULL);
         }
-        else{
 
-        }
+
         expr_free(expr);
 
         free(var_name);  
