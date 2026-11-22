@@ -542,23 +542,40 @@ static void parse_expr_tail(void){
 
 }
 
-static void parse_call_arguments_tail(void){
- if (tok.type == TOKEN_COMMA) {
+
+// AI ASSISTED START
+// AI PROMPT:
+// Zachovej puvodni pomocne funkce pro parsovani argumentu.
+// Zpracovani skutecnych volani funkci resi parse_function_call().
+
+// Preskoci pripadne layout tokeny uvnitr zavorek.
+static void skip_call_layout(void) {
+    while (tok.type == TOKEN_EOL ||
+           tok.type == TOKEN_INDENT ||
+           tok.type == TOKEN_DEDENT) {
+        advance();
+    }
+}
+
+static void parse_call_arguments_tail(void) {
+    if (tok.type == TOKEN_COMMA) {
         advance();
         parse_term();
         parse_call_arguments_tail();
     }
 }
 
-static void parse_call_arguments(void){
-   if (tok.type == TOKEN_IDENTIFIER || tok.type == TOKEN_INT_LITERAL || 
-        tok.type == TOKEN_DOUBLE_LITERAL || tok.type == TOKEN_STRING_LITERAL || 
+static void parse_call_arguments(void) {
+    if (tok.type == TOKEN_IDENTIFIER ||
+        tok.type == TOKEN_INT_LITERAL ||
+        tok.type == TOKEN_DOUBLE_LITERAL ||
+        tok.type == TOKEN_STRING_LITERAL ||
         tok.type == TOKEN_LPAREN) {
-        
         parse_term();
         parse_call_arguments_tail();
     }
 }
+// AI ASSISTED END
 
 static void parse_non_id_expression(void){
   if (tok.type == TOKEN_DOUBLE_LITERAL ||
@@ -579,96 +596,88 @@ static int is_non_id_expression(TokenType t){
 
 }
 
-// Kontrola poctu a typu argumentu oproti hlavicce funkce.
+
+// AI ASSISTED START
+// AI PROMPT:
+// Oprav parse_function_call() pro viceradkove argumenty, vcetne
+// koncove carky na samostatnem radku pred ')'. Zachovej kontrolu
+// poctu a typu argumentu a generovani kodu. Jednoradkovou
+// koncovou carku (napr. print("OK",)) odmitni.
 static data_type parse_function_call(void) {
-    if(tok.type == TOKEN_IDENTIFIER){
-
-        char *function_name = strdup(tok.attribute.s_val);
-        if (function_name == NULL) exit(99);
-
-        symbol_data *function = symtable_search_func(ts, function_name);
-
-        if (function == NULL) {
-            fprintf(stderr, "Undefined function: %s\n", function_name);
-            free(function_name);
-            exit(3); 
-        }
-        advance();
-        expect(TOKEN_LPAREN);
-
-        size_t arg_count = 0;
-        if (tok.type != TOKEN_RPAREN) {
-            ExprNode *arg = parse_expression_wrapper();
-            if (arg == NULL) exit(99);
-
-            data_type arg_type = arg->type;
-        
-
-            if (arg_count >= function->data.func.param_count) {
-                free(function_name);
-                expr_free(arg);
-                exit(5);
-            }
-
-            data_type expected_type = function->data.func.params[arg_count];
-
-            if (expected_type != type_any && arg_type != expected_type) {
-                free(function_name);
-                expr_free(arg);
-                exit(5);
-            }
-
-            process_expr_node(arg);
-            expr_free(arg);
-            arg_count++;
-
-            while (tok.type == TOKEN_COMMA) {
-                advance(); 
-
-        
-                ExprNode *arg = parse_expression_wrapper();
-                if (arg == NULL) exit(99);
-
-                // proccess argument expression, and push to stack
-                process_expr_node(arg);
-                
-                data_type type = arg->type;
-                expr_free(arg);
-
-                
-                if (arg_count >= function->data.func.param_count) {
-                    exit(5);
-                }
-
-                
-                data_type expected = function->data.func.params[arg_count];
-
-                if (expected != type_any && type != expected) {
-                    exit(5);
-                }
-
-                arg_count++;
-            }
-        }
-            expect(TOKEN_RPAREN);
-
-            if (arg_count != function->data.func.param_count) {
-                free(function_name);
-                exit(5);
-            }
-
-            data_type return_type = function->data.func.ret_type;
-
-            gen_funct_call(function_name);
-
-            free(function_name);
-            return return_type;
-        }                                 
-    
-    else {
-    syntax_error();
+    if (tok.type != TOKEN_IDENTIFIER) {
+        syntax_error();
     }
+
+    char *function_name = strdup(tok.attribute.s_val);
+    if (function_name == NULL) exit(99);
+
+    symbol_data *function = symtable_search_func(ts, function_name);
+    if (function == NULL) {
+        fprintf(stderr, "Undefined function: %s\n", function_name);
+        free(function_name);
+        exit(3);
+    }
+
+    advance();
+    expect(TOKEN_LPAREN);
+
+    // Uvnitr zavorek ignorujeme zalomeni radku a odsazeni.
+    skip_call_layout();
+
+    size_t arg_count = 0;
+    while (tok.type != TOKEN_RPAREN) {
+        ExprNode *arg = parse_expression_wrapper();
+        if (arg == NULL) exit(99);
+
+        if (arg_count >= function->data.func.param_count) {
+            expr_free(arg);
+            free(function_name);
+            exit(5);
+        }
+
+        data_type expected_type = function->data.func.params[arg_count];
+        if (expected_type != type_any && arg->type != expected_type) {
+            expr_free(arg);
+            free(function_name);
+            exit(5);
+        }
+
+        process_expr_node(arg);
+        expr_free(arg);
+        arg_count++;
+
+        skip_call_layout();
+        if (tok.type != TOKEN_COMMA) {
+            break;
+        }
+
+        advance();
+        skip_call_layout();
+
+        // Scanner potlacuje EOL uvnitr zavorek. newline_before
+        // oznacuje fyzicky novy radek pred uzaviraci zavorkou.
+        if (tok.type == TOKEN_RPAREN) {
+            if (!tok.newline_before) {
+                free(function_name);
+                syntax_error();
+            }
+            break;
+        }
+    }
+
+    expect(TOKEN_RPAREN);
+    if (arg_count != function->data.func.param_count) {
+        free(function_name);
+        exit(5);
+    }
+
+    data_type return_type = function->data.func.ret_type;
+    gen_funct_call(function_name);
+    free(function_name);
+    return return_type;
 }
+// AI ASSISTED END
+
 
 // Volani funkce zatim resime zvlast, ostatni vyrazy pres precedencni parser.
 // AI-assisted (ChatGPT): pridani vystupniho parametru pro ExprNode.
@@ -692,6 +701,7 @@ static data_type parse_call_or_exp(ExprNode **out_expr) {
 
 static void parse_stmt_tail(void){
     if (tok.type == TOKEN_SEMICOLON || tok.type == TOKEN_EOL) advance();
+    else if(tok.type == TOKEN_DEDENT || tok.type == TOKEN_EOF) return;
     else syntax_error();
 }
 
