@@ -20,6 +20,8 @@ static bool has_lookahead = false;
 static SymTable *ts = NULL;
 static data_type current_return_type = type_unknown;
 static char *entry_function_name = NULL;
+static bool stmt_returns = false;
+static bool block_returns = false;
 
 
 typedef enum {
@@ -62,7 +64,7 @@ static data_type parse_opt_return_type(void);
 
 // Bloky, prikazy a navratove hodnoty
 static void parse_block(void);
-static void parse_stmts(void);
+static bool parse_stmts(void);
 static void parse_stmt(void);
 static void parse_stmt_tail(void);
 static void parse_stmt_tail_id(char *var_name);
@@ -475,11 +477,14 @@ static void parse_block(void) {
     }
 
     parse_stmt();
-    parse_stmts();
+    bool safe_return = stmt_returns;
 
+    if(parse_stmts() == true) safe_return = true;
+    
     expect(TOKEN_DEDENT);
 
     symtable_leave_scope(ts);
+    block_returns = safe_return;
 }
 
 
@@ -838,10 +843,16 @@ static void parse_opt_return_tail(void) {
 }
 
 static void parse_function_body(void){
-    if(tok.type == TOKEN_EOL){
+    if (tok.type == TOKEN_EOL) {
         advance();
         parse_block();
-    }
+
+        if (current_return_type != type_unit &&
+            current_return_type != type_unknown &&
+            !block_returns) {
+            exit(6);
+        }
+}
 
     else if (tok.type == TOKEN_IDENTIFIER || is_non_id_expression(tok.type)) {
     ExprNode *expr = NULL;
@@ -886,6 +897,8 @@ static int is_stmt_start(TokenType t){
 
 
 static void parse_stmt(void) {
+    stmt_returns = false;
+
     if(tok.type == TOKEN_KW_VAR || tok.type == TOKEN_KW_VAL){
         bool is_var =(tok.type == TOKEN_KW_VAR);
         advance();
@@ -952,6 +965,7 @@ static void parse_stmt(void) {
     else if(tok.type == TOKEN_KW_RETURN){
         advance();
         parse_opt_return_tail();
+        stmt_returns = true;
     }
 
     else if(tok.type == TOKEN_KW_IF){
@@ -971,11 +985,20 @@ static void parse_stmt(void) {
         expr_free(expr);
 
         parse_block();
+        bool then_returns = block_returns;
+
         expect(TOKEN_KW_ELSE);
         expect(TOKEN_EOL);
         gen_if_else();
+
         parse_block();
+        bool else_returns = block_returns;
+
         gen_if_end();
+
+        // IF zarucene vraci pouze tehdy,
+        // kdyz vraci obe vetve.
+        stmt_returns = then_returns && else_returns;
     }
 
     else if (tok.type == TOKEN_IDENTIFIER) {
@@ -1026,8 +1049,15 @@ static void parse_stmt(void) {
 
 }
 
-static void parse_stmts(void) {
+static bool parse_stmts(void) {
+    bool safe_return = false;
+    
     while (is_stmt_start(tok.type)){
         parse_stmt();
+
+        if(stmt_returns){
+            safe_return = true;
+        }
     }
+    return safe_return;
 }
