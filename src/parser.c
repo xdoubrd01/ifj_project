@@ -158,8 +158,9 @@ static void parse_program(ParserRound round) {
 
 // Prvni pruchod si ulozi hlavicky funkci, aby slo volat i funkce
 // definovane az pozdeji. Ve druhem se zpracovavaji jejich tela.
-// source musi jit vratit na zacatek pomoci rewind().
-void parse(FILE *source) {
+// AI ASSISTED START
+// AI PROMPT: Umoznovat dva pruchody nad pametovym bufferem bez rewind a fmemopen.
+void parse(const char *input, size_t length) {
     ts = symtable_create(0);
     if(ts == NULL) exit(99);
 
@@ -168,7 +169,7 @@ void parse(FILE *source) {
     }
 
     // prvni pruchod
-    scanner_init(source);
+    scanner_init_buffer(input, length);
     advance();
     parse_program(FIRST_ROUND);
 
@@ -181,8 +182,7 @@ void parse(FILE *source) {
     }
     // Tabulku symbolu nechavame pro druhy pruchod.
     scanner_free();
-    rewind(source);
-    scanner_init(source);
+    scanner_init_buffer(input, length);
 
     // druhy pruchod
    if (entry_function_name == NULL) {
@@ -196,6 +196,7 @@ void parse(FILE *source) {
         
     scanner_free();
 }
+// AI ASSISTED END
 
 
 static void parse_functions(ParserRound round) {

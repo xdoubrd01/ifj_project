@@ -33,6 +33,12 @@ typedef DynamicBuffer DynamicString;
 
 /* The stream belongs to the caller; the scanner never closes it. */
 static FILE         *source = NULL;
+// AI ASSISTED START
+// AI PROMPT: Podporuj pametovy vstup bez fmemopen a zachovej FILE vstup.
+static const unsigned char *memory_source = NULL;
+static size_t memory_length = 0;
+static size_t memory_position = 0;
+// AI ASSISTED END
 static DynamicString buffer;
 
 /* Only one scanner instance is active at a time. */
@@ -72,6 +78,11 @@ static bool is_name_char(int c) { return is_letter(c) || is_digit(c) || c == '_'
 static int read_char(void) {
     if (pushed_count > 0) {
         return pushed_chars[--pushed_count];
+    }
+
+    if (memory_source != NULL) {
+        if (memory_position >= memory_length) return EOF;
+        return memory_source[memory_position++];
     }
 
     return fgetc(source);
@@ -1076,7 +1087,7 @@ static int read_at_main(Token *token) {
  * paměti identifikátorů a řetězců.
  */
 static int scan_next(Token *token) {
-    if (source == NULL || token == NULL) {
+    if ((source == NULL && memory_source == NULL) || token == NULL) {
         return 99;
     }
 
@@ -1371,6 +1382,16 @@ void scanner_init(FILE *source_file) {
     source = source_file;
 }
 
+// AI ASSISTED START
+// AI PROMPT: Inicializuj scanner nad polem bajtu pro opakovane pruchody.
+void scanner_init_buffer(const char *input, size_t length) {
+    scanner_free();
+    memory_source = (const unsigned char *)input;
+    memory_length = length;
+    memory_position = 0;
+}
+// AI ASSISTED END
+
 /**
  * @brief Returns one token and records skipped physical line breaks.
  *
@@ -1388,7 +1409,7 @@ void scanner_init(FILE *source_file) {
  * paměti identifikátorů a řetězců.
  */
 int get_next_token(Token *token) {
-    if (source == NULL || token == NULL) {
+    if ((source == NULL && memory_source == NULL) || token == NULL) {
         return 99;
     }
 
@@ -1406,7 +1427,7 @@ int get_next_token(Token *token) {
     int rc = scan_next(token);
 
     /* A failed stream read must not be mistaken for a normal EOF. */
-    if (ferror(source)) {
+    if (source != NULL && ferror(source)) {
         if (rc == 0 && (token->type == TOKEN_IDENTIFIER || token->type == TOKEN_STRING_LITERAL)) {
             token_destroy(token);
         }
@@ -1451,4 +1472,7 @@ void scanner_free(void) {
     skipped_newline     = false;
     pushed_count        = 0;
     source              = NULL;
+    memory_source       = NULL;
+    memory_length       = 0;
+    memory_position     = 0;
 }
