@@ -63,7 +63,7 @@ static data_type parse_opt_type(void);
 static data_type parse_opt_return_type(void);
 
 // Bloky, prikazy a navratove hodnoty
-static void parse_block(void);
+static void parse_block(bool new_scope);
 static bool parse_stmts(void);
 static void parse_stmt(void);
 static void parse_stmt_tail(void);
@@ -467,27 +467,30 @@ static void parse_function(ParserRound round) {
 
 /* 10. BLOCK -> INDENT STMT STMTS DEDENT */
 
-static void parse_block(void) {
+static void parse_block(bool new_scope) {
     expect(TOKEN_INDENT);
     block_depth++;
 
-    if (!symtable_enter_scope(ts)) {
+    if (new_scope && !symtable_enter_scope(ts)) {
         exit(99);
     }
 
     parse_stmt();
     bool safe_return = stmt_returns;
 
-    if(parse_stmts() == true) safe_return = true;
-    
+    if (parse_stmts()) {
+        safe_return = true;
+    }
+
     expect(TOKEN_DEDENT);
 
-    symtable_leave_scope(ts);
+    if (new_scope) {
+        symtable_leave_scope(ts);
+    }
+
     block_depth--;
     block_returns = safe_return;
 }
-
-
 
 static data_type parse_type(void) {
     if(tok.type == TOKEN_TYPE_INT) {
@@ -668,11 +671,11 @@ static void parse_opt_return_tail(void) {
     syntax_error();
 }
 
-static void parse_function_body(void){
+static void parse_function_body(){
     if (tok.type == TOKEN_EOL) {
         implicit_return_ready = false;
         advance();
-        parse_block();
+        parse_block(false);
 
         if (current_return_type != type_unit &&
             current_return_type != type_unknown &&
@@ -791,7 +794,7 @@ static void parse_stmt(void) {
         gen_while_start(expr);
         expr_free(expr);
         
-        parse_block();
+        parse_block(true);
         gen_while_end();
 
         stmt_returns = false;
@@ -819,14 +822,14 @@ static void parse_stmt(void) {
         gen_if_start(expr);
         expr_free(expr);
 
-        parse_block();
+        parse_block(true);
         bool then_returns = block_returns;
 
         expect(TOKEN_KW_ELSE);
         expect(TOKEN_EOL);
         gen_if_else();
 
-        parse_block();
+        parse_block(true);
         bool else_returns = block_returns;
 
         gen_if_end();
