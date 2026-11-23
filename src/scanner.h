@@ -17,6 +17,7 @@
 
 #include <stdbool.h>
 #include <stdio.h>
+#include <stddef.h>
 
 /**
  * @brief Tokens recognized by this scanner.
@@ -123,6 +124,8 @@ typedef struct {
  * @note Does not close the input stream or free previously returned attributes.
  */
 void scanner_init(FILE *source_file);
+
+void scanner_init_buffer(const char *input, size_t length);
 
 /**
  * @brief Reads the next token, including indentation markers when needed.

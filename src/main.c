@@ -1,10 +1,9 @@
-#define _POSIX_C_SOURCE 200809L
 #include <stdint.h>
 #include "scanner.h"
 #include <stdio.h>
-#include <stdlib.h> // Přidáno pro použití free()
+#include <stdlib.h>
 #include "parser.h"
-// Pomocná funkce pro převod typu tokenu na čitelný text
+// Pomocna funkce pro prevod typu tokenu na citelny text
 const char* token_type_to_string(TokenType type) {
     switch (type) {
         case TOKEN_EOF: return "TOKEN_EOF";
@@ -51,76 +50,48 @@ const char* token_type_to_string(TokenType type) {
     }
 }
 
-/*
- * AI-generated code (ChatGPT).
- * Prompt: "nahrad pomocnou funkci prepare_input(), ktera pouziva
- * tmpfile() resenim s dynamickym polem a fmemopen().
- * vstup se nacita ze stdin, musi podporovat dva pruchody
- * parseru spravne osetrovat chyby a uvolnneni pameti."
- */
-static FILE *prepare_input(char **buffer_out) {
+// AI ASSISTED START
+// AI PROMPT: Nacti stdin do pameti bez fmemopen, se zachovanim presne delky.
+static char *prepare_input(size_t *length_out) {
     size_t capacity = 4096;
     size_t length = 0;
-
-    *buffer_out = NULL;
-
     char *buffer = malloc(capacity);
-    if (buffer == NULL) {
-        return NULL;
-    }
+    if (buffer == NULL) return NULL;
 
     int c;
-
     while ((c = fgetc(stdin)) != EOF) {
         if (length == capacity) {
             if (capacity > SIZE_MAX / 2) {
                 free(buffer);
                 return NULL;
             }
-
             capacity *= 2;
-
-            char *tmp = realloc(buffer, capacity);
-            if (tmp == NULL) {
+            char *next = realloc(buffer, capacity);
+            if (next == NULL) {
                 free(buffer);
                 return NULL;
             }
-
-            buffer = tmp;
+            buffer = next;
         }
-
         buffer[length++] = (char)c;
     }
-
     if (ferror(stdin)) {
         free(buffer);
         return NULL;
     }
-
-    FILE *source = fmemopen(buffer, length, "r");
-
-    if (source == NULL) {
-        free(buffer);
-        return NULL;
-    }
-
-    *buffer_out = buffer;
-    return source;
+    *length_out = length;
+    return buffer;
 }
 
 int main(void) {
-    char *buffer = NULL;
-    FILE *source = prepare_input(&buffer);
-
-    if (source == NULL) {
+    size_t length = 0;
+    char *buffer = prepare_input(&length);
+    if (buffer == NULL) {
         fprintf(stderr, "Internal error: cannot prepare input\n");
         return 99;
     }
-
-    parse(source);
-
-    fclose(source);
+    parse(buffer, length);
     free(buffer);
-
     return 0;
 }
+// AI ASSISTED END
