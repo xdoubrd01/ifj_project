@@ -9,8 +9,6 @@
 #include "symtable.h"
 #include "exp_parser.h"
 #include "semantic.h"
-#include "exp_parser.h"
-#include "semantic.h"
 
 
 // Aktualni token a pripadny prednacteny token ze scanneru.
@@ -73,7 +71,6 @@ static int is_stmt_start(TokenType t);
 
 // Vyrazy a volani funkci
 static int is_non_id_expression(TokenType t);
-static data_type parse_function_call(void);
 static data_type parse_call_or_exp(ExprNode **out_expr);
 static ExprNode *parse_expression_wrapper(void);
 
@@ -510,22 +507,6 @@ static data_type parse_type(void) {
     }
 }
 
-// AI ASSISTED START
-// AI PROMPT:
-// Zachovej puvodni pomocne funkce pro parsovani argumentu.
-// Zpracovani skutecnych volani funkci resi parse_function_call().
-
-// Preskoci pripadne layout tokeny uvnitr zavorek.
-static void skip_call_layout(void) {
-    while (tok.type == TOKEN_EOL ||
-           tok.type == TOKEN_INDENT ||
-           tok.type == TOKEN_DEDENT) {
-        advance();
-    }
-}
-
-// AI ASSISTED END
-
 static int is_non_id_expression(TokenType t){
     if (t == TOKEN_STRING_LITERAL || t == TOKEN_DOUBLE_LITERAL || t == TOKEN_INT_LITERAL || t == TOKEN_MINUS || t == TOKEN_LPAREN ){
         return 1;
@@ -537,114 +518,8 @@ static int is_non_id_expression(TokenType t){
 }
 
 
-// AI ASSISTED START
-// AI PROMPT:
-// Rozsir parse_function_call() o vnorena volani funkci v argumentech,
-// napr. print(answer()) a f(g(2)). Zachovej dosavadni podporu
-// viceradkovych argumentu, kontrolu koncove carky podle
-// newline_before, semantickou kontrolu typu a generovani argumentu.
-// Povol implicitni konverzi Int -> Double u argumentu.
-static data_type parse_function_call(void) {
-    if (tok.type != TOKEN_IDENTIFIER) {
-        syntax_error();
-    }
-
-    char *function_name = strdup(tok.attribute.s_val);
-    if (function_name == NULL) exit(99);
-
-    symbol_data *function = symtable_search_func(ts, function_name);
-    if (function == NULL) {
-        fprintf(stderr, "Undefined function: %s\n", function_name);
-        free(function_name);
-        exit(3);
-    }
-
-    advance();
-    expect(TOKEN_LPAREN);
-    skip_call_layout();
-
-    size_t arg_count = 0;
-    while (tok.type != TOKEN_RPAREN) {
-        ExprNode *arg = NULL;
-        data_type arg_type;
-
-        // Vnorene volani se zpracuje rekurzivne a samo vlozi
-        // navratovou hodnotu na datovy zasobnik.
-        if (tok.type == TOKEN_IDENTIFIER && peek_token() == TOKEN_LPAREN) {
-            arg_type = parse_function_call();
-        } else {
-            arg = parse_expression_wrapper();
-            if (arg == NULL) exit(99);
-            arg_type = arg->type;
-        }
-
-        if (arg_count >= function->data.func.param_count) {
-            expr_free(arg);
-            free(function_name);
-            exit(5);
-        }
-
-        data_type expected_type = function->data.func.params[arg_count];
-        if (expected_type != type_any && arg_type != expected_type &&
-            !(expected_type == type_double && arg_type == type_int)) {
-            expr_free(arg);
-            free(function_name);
-            exit(5);
-        }
-
-        // Bezny vyraz musi vygenerovat kod; vnorene volani uz
-        // provedlo gen_funct_call() a hodnotu ma na zasobniku.
-        if (arg != NULL) {
-            process_expr_node(arg);
-            expr_free(arg);
-        }
-
-        if (expected_type == type_double && arg_type == type_int) {
-            gen_inst0("INT2FLOATS");
-        }
-
-        arg_count++;
-        skip_call_layout();
-        if (tok.type != TOKEN_COMMA) {
-            break;
-        }
-
-        advance();
-        skip_call_layout();
-
-        // Scanner potlacuje EOL uvnitr zavorek; fyzicke zalomeni
-        // radku pred ')' je dostupne v tok.newline_before.
-        if (tok.type == TOKEN_RPAREN) {
-            if (!tok.newline_before) {
-                free(function_name);
-                syntax_error();
-            }
-            break;
-        }
-    }
-
-    expect(TOKEN_RPAREN);
-    if (arg_count != function->data.func.param_count) {
-        free(function_name);
-        exit(5);
-    }
-
-    data_type return_type = function->data.func.ret_type;
-    gen_funct_call(function_name);
-    free(function_name);
-    return return_type;
-}
-// AI ASSISTED END
-
-
-// Volani funkce zatim resime zvlast, ostatni vyrazy pres precedencni parser.
-// AI-assisted (ChatGPT): pridani vystupniho parametru pro ExprNode.
 static data_type parse_call_or_exp(ExprNode **out_expr) {
     *out_expr = NULL;
-
-    if (tok.type == TOKEN_IDENTIFIER && peek_token() == TOKEN_LPAREN) {
-        return parse_function_call();
-    }
 
     if (tok.type == TOKEN_IDENTIFIER || is_non_id_expression(tok.type)) {
         ExprNode *expr = parse_expression_wrapper();
@@ -734,13 +609,12 @@ static ExprNode *parse_expression_wrapper(void) {
     ExprNode *expr = NULL;
     int result;
 
-    if (has_lookahead == true) {
+    if (has_lookahead) {
         result = parse_expression(ts, &tok, &lookahead, &expr);
 
         tok = lookahead;
         has_lookahead = false;
-    }
-    else {
+    } else {
         result = parse_expression(ts, NULL, &tok, &expr);
     }
 
@@ -955,49 +829,25 @@ static void parse_stmt(void) {
         stmt_returns = then_returns && else_returns;
     }
 
-    else if (tok.type == TOKEN_IDENTIFIER) {
-
-    if (peek_token() == TOKEN_LPAREN) {
-        parse_function_call();
-        parse_stmt_tail();
-    }
-
-    else {
+    else if (tok.type == TOKEN_IDENTIFIER && peek_token() == TOKEN_ASSIGN) {
         char *var_name = strdup(tok.attribute.s_val);
         if (var_name == NULL) exit(99);
 
-            advance();
-            parse_stmt_tail_id(var_name);
-
-            free(var_name);
-        }
+        advance();
+        parse_stmt_tail_id(var_name);
+        free(var_name);
     }
 
-    
-    // AI ASSISTED START
-    // AI PROMPT:
-    // oprav zpracovani samostatnych vyrazovych prikazu
-    // v parse_stmt(). Misto jednoho tokenu zpracuj cely
-    // vyraz pomoci existujiciho precedencniho parseru.
-    // Vysledek vyrazu se nepouziva.
-
-    else if (is_non_id_expression(tok.type)) {
+    else if (tok.type == TOKEN_IDENTIFIER || is_non_id_expression(tok.type)) {
         ExprNode *expr = parse_expression_wrapper();
-
-        if (expr == NULL) {
-            exit(99);
-        }
+        if (expr == NULL) exit(99);
 
         process_expr_node(expr);
-
-        // Vysledek samostatneho vyrazu se zahodi.
         gen_inst1("POPS", "GF@%tmp_res");
 
         expr_free(expr);
         parse_stmt_tail();
     }
-
-    // AI ASSISTED END
 
     else syntax_error();
 
