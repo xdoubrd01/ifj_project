@@ -3,8 +3,11 @@
 // Author:     Jakub Grásgruber <xgrasgj00>
 
 #include "exp_parser.h"
+#include "array_utils.h"
 #include "scanner.h"
 #include "semantic.h"
+#include "token_utils.h"
+#include <limits.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -115,18 +118,45 @@ typedef struct {
   Token token;          // Store the actual token for semantic analysis
 } Stack_Item;
 
-// AI - UPDATED: 100 -> 1000, 100 overflowed already at ~49 nested '('
-#define STACK_MAX_SIZE 1000              // Maximum size of the stack
-static Stack_Item stack[STACK_MAX_SIZE]; // AI - UPDATED: static
-static int stack_top = -1;               // AI - UPDATED: static
+// dynamic stack
+static Stack_Item *stack;
+static size_t stack_capacity;
+static int stack_top = -1; // AI - UPDATED: static
 
-static void push(Stack_Item item) { // AI - UPDATED: static
-  if (stack_top < STACK_MAX_SIZE - 1) {
-    stack[++stack_top] = item;
-  } else {
-    fprintf(stderr, "Stack overflow\n");
+// dynamic stack: grows when more items are required
+static void reserve_stack(size_t required) {
+  size_t capacity;
+
+  if (required <= stack_capacity) {
+    return;
+  }
+  if (required > INT_MAX ||
+      !array_next_capacity(stack_capacity, required, sizeof(*stack), 64,
+                           &capacity)) {
+    fprintf(stderr, "Internal error (99): expression stack is too large\n");
     exit(99);
   }
+
+  Stack_Item *grown = realloc(stack, capacity * sizeof(*grown));
+  if (grown == NULL) {
+    fprintf(stderr, "Internal error (99): out of memory\n");
+    exit(99);
+  }
+  stack = grown;
+  stack_capacity = capacity;
+}
+
+// dynamic stack: frees the memory after the outermost expression
+static void release_stack(void) {
+  free(stack);
+  stack = NULL;
+  stack_capacity = 0;
+}
+
+static void push(Stack_Item item) { // AI - UPDATED: static
+  // dynamic stack
+  reserve_stack((size_t)stack_top + 2);
+  stack[++stack_top] = item;
 }
 
 static Stack_Item pop(void) { // AI - UPDATED: static
@@ -162,10 +192,7 @@ static void insert_shift_marker(void) {
     top_index--; // skip non-terminals above the top terminal
   }
 
-  if (stack_top >= STACK_MAX_SIZE - 1) {
-    fprintf(stderr, "Stack overflow while inserting shift marker\n");
-    exit(99);
-  }
+  reserve_stack((size_t)stack_top + 2); // dynamic stack
 
   for (int i = stack_top; i > top_index; i--) {
     stack[i + 1] = stack[i]; // move non-terminals one position up
@@ -190,8 +217,7 @@ static void free_item(Stack_Item *item) {
     item->node = NULL;
     if (item->token_type == TOKEN_IDENTIFIER ||
         item->token_type == TOKEN_STRING_LITERAL) {
-      free(item->token.attribute.s_val); // lexeme from scanner
-      item->token.attribute.s_val = NULL;
+      token_destroy(&item->token); // lexeme from scanner
     }
   }
 }
@@ -289,6 +315,8 @@ static int make_term_node(SymTable *st, Stack_Item *item, ExprNode **out) {
 static int read_call_token(Token *current) {
   int rc = get_next_token(current);
   if (rc != 0) {
+    fprintf(stderr, "%s error while getting the next token\n",
+            rc == 1 ? "Lexical" : "Internal");
     current->type = TOKEN_EOF;
   }
   return rc;
@@ -312,6 +340,7 @@ static int parse_call(SymTable *st, int item_index, Token *current) {
     }
     ExprNode **grown = realloc(args, (argc + 1) * sizeof(ExprNode *));
     if (grown == NULL) {
+      fprintf(stderr, "Internal error (99): out of memory\n");
       expr_free(arg);
       rc = 99;
       break;
@@ -444,7 +473,8 @@ int parse_expression(SymTable *st, Token *pending, Token *tok, // AI - UPDATED
       // AI - UPDATED: read_token instead of get_next_token (pending token
       // first)
       if ((rc = read_token(&current_token, tok, &use_saved)) != 0) {
-        fprintf(stderr, "Lexical error while getting the next token\n");
+        fprintf(stderr, "%s error while getting the next token\n",
+                rc == 1 ? "Lexical" : "Internal");
         current_token.type = TOKEN_EOF; // attributes are invalid
         goto error;
       }
@@ -471,7 +501,8 @@ int parse_expression(SymTable *st, Token *pending, Token *tok, // AI - UPDATED
       // AI - UPDATED: read_token instead of get_next_token (pending token
       // first)
       if ((rc = read_token(&current_token, tok, &use_saved)) != 0) {
-        fprintf(stderr, "Lexical error while getting the next token\n");
+        fprintf(stderr, "%s error while getting the next token\n",
+                rc == 1 ? "Lexical" : "Internal");
         current_token.type = TOKEN_EOF; // attributes are invalid
         goto error;
       }
@@ -639,6 +670,10 @@ int parse_expression(SymTable *st, Token *pending, Token *tok, // AI - UPDATED
   *out = stack[base + 1].node; // finished tree ($ E on the stack)
   stack[base + 1].node = NULL;
   stack_top = base - 1;
+  // dynamic stack
+  if (base == 0) {
+    release_stack();
+  }
   *tok = current_token; // Save remaining token, wich ended parsing
   return 0;             // Successful parsing
 
@@ -649,5 +684,9 @@ error:
   // AI - UPDATED: clears only items of this expression
   stack_clear(base);    // everything still on the stack
   *tok = current_token; // caller owns the token where we stopped
+  // dynamic stack
+  if (base == 0) {
+    release_stack();
+  }
   return rc;
 }
