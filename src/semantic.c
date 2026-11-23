@@ -2,23 +2,6 @@
 // Filename:   semantic.c
 // Author:     Jakub Grásgruber <xgrasgj00>
 
-/*
- * semantic.c - semantic checks (variables, types of expressions)
- *
- * AI (Claude Code, Claude Opus 5.5) used to adapt my functions to the
- * current symtable.h and to work with the expression tree; functions written
- * by AI have "prompt:" above them, my functions changed by AI are marked
- * "AI - UPDATED"
- * prompt: "Adapt semantic.c to the current symtable.h on origin/development,
- *          don't change the overall logic of the functions."
- * prompt: (answers to questions of AI) "Error codes should be in the
- *          assignment PDFs, verify them. Type unknown treat as an error
- *          unless the assignment says otherwise (verify). Returning codes
- *          instead of exit() is fine."
- * prompt: "Add a unique id of the variable (for shadowing) and update my part."
- * prompt: "Add more accurate comments/description of functions, leave
- *          already existing comments."
- */
 #include "semantic.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -171,6 +154,43 @@ int sem_check_condition(const ExprNode *cond) {
     fprintf(stderr, "Semantic error(6): Condition is not a relation\n");
     return 6;
   }
+  return 0;
+}
+
+// prompt: "Add a semantic check of function calls inside expressions: undefined
+//          function (3), wrong argument count or type (5), Boolean cannot be
+//          passed (6), Int -> Double conversion of arguments in the tree."
+// Checks a function call and converts its arguments to the parameter types
+int sem_check_call(SymTable *st, const char *name, ExprNode **args, size_t argc,
+                   data_type *out_type) {
+  symbol_data *func = symtable_search_func(st, name);
+  if (func == NULL) {
+    fprintf(stderr, "Semantic error(3): Function '%s' is not defined\n", name);
+    return 3;
+  }
+  if (argc != func->data.func.param_count) {
+    fprintf(stderr, "Semantic error(5): Wrong argument count of '%s'\n", name);
+    return 5;
+  }
+  for (size_t i = 0; i < argc; i++) {
+    data_type expected = func->data.func.params[i];
+    if (args[i]->type == type_bool) {
+      // relation can be used only directly in if / while
+      fprintf(stderr, "Semantic error(6): Boolean argument of '%s'\n", name);
+      return 6;
+    }
+    if (!symtable_type_compatible(expected, args[i]->type)) {
+      fprintf(stderr, "Semantic error(5): Wrong argument type of '%s'\n", name);
+      return 5;
+    }
+    if (expected != type_any) {
+      int rc = sem_coerce_expr(&args[i], expected); // Int -> Double
+      if (rc != 0) {
+        return rc;
+      }
+    }
+  }
+  *out_type = func->data.func.ret_type;
   return 0;
 }
 

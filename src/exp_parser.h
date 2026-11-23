@@ -2,22 +2,6 @@
 // Filename:   exp_parser.h
 // Author:     Jakub Grásgruber <xgrasgj00>
 
-/*
- * exp_parser.h - precedence parser of expressions
- *
- * AI (Claude Code, Claude Opus 5.5) used for the new interface of
- * parse_expression, parts changed by AI are marked "AI - UPDATED"
- * prompt: "Look at origin/development (src/parser.c, src/scanner.h,
- *          src/symtable.h). Adapt parse_expression so it returns an
- *          expression tree instead of printing code, and so it fits the
- *          lookahead the parser uses (identifier already read in CALL_OR_EXP).
- *          Propose the interface first."
- * prompt: (answers to questions of AI) "Error codes should be in the
- *          assignment PDFs, verify them. Returning codes instead of exit()
- *          is fine."
- * prompt: "Add more accurate comments/description of functions, leave
- *          already existing comments."
- */
 #ifndef EXP_PARSER_H
 #define EXP_PARSER_H
 
@@ -25,6 +9,11 @@
 #include "symtable.h"
 #include "expr_tree.h" // AI - UPDATED: result is an expression tree
 
+// prompt: "Look at origin/development (src/parser.c, src/scanner.h,
+//          src/symtable.h). Adapt parse_expression so it returns an
+//          expression tree instead of printing code, and so it fits the
+//          lookahead the parser uses (identifier already read in CALL_OR_EXP).
+//          Propose the interface first."
 // AI - UPDATED: was int parse_expression(hashtable *ts, Token *next_token,
 //               Token *next_token) (duplicate parameter, did not compile)
 /*

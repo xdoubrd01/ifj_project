@@ -2,21 +2,6 @@
 // Filename:   semantic.h
 // Author:     Jakub Grásgruber <xgrasgj00>
 
-/*
- * semantic.h - semantic checks used by the parser and the expression parser
- *
- * AI (Claude Code, Claude Opus 5.5) used to adapt the functions to the
- * current symtable.h, parts changed by AI are marked "AI - UPDATED"
- * prompt: "Adapt semantic.c to the current symtable.h on origin/development
- *          (SymTable, scopes), keep the logic of my functions."
- * prompt: (answers to questions of AI) "Error codes should be in the
- *          assignment PDFs, verify them. Type unknown treat as an error
- *          unless the assignment says otherwise (verify). Returning codes
- *          instead of exit() is fine."
- * prompt: "Add a unique id of the variable (for shadowing) and update my part."
- * prompt: "Add more accurate comments/description of functions, leave
- *          already existing comments."
- */
 #ifndef SEMANTIC_H
 #define SEMANTIC_H
 
@@ -25,6 +10,10 @@
 #include "expr_tree.h" // AI - UPDATED: nodes are needed for implicit conversions
 #include <stdbool.h>
 
+// prompt: "Adapt semantic.c to the current symtable.h on origin/development
+//          (SymTable, scopes), keep the logic of my functions."
+// prompt: "Add a unique id of the variable (for shadowing) and update my
+//          part."
 // AI - UPDATED: hashtable* -> SymTable*, void + exit() -> return code,
 //               new functions for assignment, conversion and condition
 /*
@@ -63,5 +52,10 @@ int sem_binary_op(TokenType op, ExprNode **left, ExprNode **right,
                   ExprOp *out_op, data_type *out_type);
 // Checks operand of unary + / -
 int sem_unary_op(const ExprNode *operand);
+// prompt: "Add a semantic check of function calls inside expressions."
+// Checks a call (3 undefined, 5 arguments, 6 Boolean argument), converts
+// Int -> Double arguments in the tree, stores the return type to *out_type
+int sem_check_call(SymTable *st, const char *name, ExprNode **args, size_t argc,
+                   data_type *out_type);
 
 #endif // SEMANTIC_H
