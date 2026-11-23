@@ -308,9 +308,9 @@ symbol_data *symtable_search_func(SymTable *table, const char *key) {
     return symbol;
 }
 
-/* Symbol registration. */
-
-bool symtable_insert_var(SymTable *table, const char *key, data_type type, bool is_mutable) {
+/* Shared insertion for local variables and function parameters. */
+static bool insert_local_variable(SymTable *table, const char *key, data_type type, bool is_mutable,
+                                  bool is_parameter) {
     if (table == NULL || table->current_scope == NULL || key == NULL) {
         return false;
     }
@@ -337,7 +337,7 @@ bool symtable_insert_var(SymTable *table, const char *key, data_type type, bool 
     symbol->type                  = sym_var;
     symbol->data.var.var_type     = type;
     symbol->data.var.is_mutable   = is_mutable;
-    symbol->data.var.is_parameter = false;
+    symbol->data.var.is_parameter = is_parameter;
     symbol->data.var.id           = table->next_var_id;
 
     /* Release the new record if insertion cannot take ownership of it. */
@@ -354,40 +354,12 @@ bool symtable_insert_var(SymTable *table, const char *key, data_type type, bool 
     return true;
 }
 
+bool symtable_insert_var(SymTable *table, const char *key, data_type type, bool is_mutable) {
+    return insert_local_variable(table, key, type, is_mutable, false);
+}
+
 bool symtable_insert_param(SymTable *table, const char *key, data_type type) {
-    if (table == NULL || table->current_scope == NULL || key == NULL) {
-        return false;
-    }
-
-    /* Parameters and ordinary variables share the current scope namespace. */
-    if (symtable_search_current_var(table, key) != NULL) {
-        return false;
-    }
-
-    symbol_data *symbol = malloc(sizeof(*symbol));
-    if (symbol == NULL) {
-        return false;
-    }
-
-    /*
-     * A parameter is represented as a variable with additional metadata.
-     * Parameters are immutable regardless of how ordinary variables are handled.
-     */
-    symbol->type                  = sym_var;
-    symbol->data.var.var_type     = type;
-    symbol->data.var.is_mutable   = false;
-    symbol->data.var.is_parameter = true;
-    symbol->data.var.id           = table->next_var_id;
-
-    /* Failed insertion leaves cleanup of the new record to this function. */
-    if (!ht_insert(table->current_scope->table, key, symbol)) {
-        free(symbol);
-        return false;
-    }
-
-    /* Parameters share the id sequence with ordinary variables. */
-    table->next_var_id++;
-    return true;
+    return insert_local_variable(table, key, type, false, true);
 }
 
 bool symtable_insert_func(SymTable *table, const char *key, data_type ret_type, size_t param_count,
