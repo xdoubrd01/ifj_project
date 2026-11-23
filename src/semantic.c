@@ -2,27 +2,6 @@
 // Filename:   semantic.c
 // Author:     Jakub Grásgruber <xgrasgj00>
 
-/*
- * semantic.c - semantic checks (variables, types of expressions)
- *
- * AI (Claude Code, Claude Opus 5.5) used to adapt my functions to the
- * current symtable.h and to work with the expression tree; functions written
- * by AI have "prompt:" above them, my functions changed by AI are marked
- * "AI - UPDATED"
- * prompt: "Adapt semantic.c to the current symtable.h on origin/development,
- *          don't change the overall logic of the functions."
- * prompt: (answers to questions of AI) "Error codes should be in the
- *          assignment PDFs, verify them. Type unknown treat as an error
- *          unless the assignment says otherwise (verify). Returning codes
- *          instead of exit() is fine."
- * prompt: "Add a unique id of the variable (for shadowing) and update my part."
- * prompt: "Add more accurate comments/description of functions, leave
- *          already existing comments."
- * prompt: "My colleague needs function calls inside expressions, e.g.
- *          val x = getValue() + 1, print(2 * getValue()) or
- *          return getValue() + 1. Suggest how to add it to my part without
- *          changing the precedence table."
- */
 #include "semantic.h"
 #include <stdio.h>
 #include <stdlib.h>

@@ -2,34 +2,15 @@
 // Filename:   expr_tree.h
 // Author:     Jakub Grásgruber <xgrasgj00>
 
-/*
- * expr_tree.h - typed expression tree, interface between the expression
- *               parser (exp_parser.c), semantics (semantic.c) and the code
- *               generator
- *
- * AI: file written with AI (Claude Code, Claude Opus 5.5) after
- *     discussing the interface, checked and adjusted by me
- * prompt: "exp_parser.c prints IFJcode with printf, I want it to build an
- *          expression tree with types for my colleague doing the code
- *          generator. Before writing any code, propose the interface first."
- * prompt: "The interface is fine, you can create separate expr_tree files.
- *          Keep it as basic and simple as possible, but functional."
- * prompt: "Variable in the tree has only a name, so the generator cannot tell
- *          shadowed variables apart. Add a unique id to symtable and pass it
- *          into the tree."
- * prompt: "Add more accurate comments/description of functions, leave
- *          already existing comments."
- * prompt: "My colleague needs function calls inside expressions, e.g.
- *          val x = getValue() + 1, print(2 * getValue()) or
- *          return getValue() + 1. Suggest how to add it to my part without
- *          changing the precedence table."
- */
 #ifndef EXPR_TREE_H
 #define EXPR_TREE_H
 
 #include "symtable.h"
 #include <stdio.h>
 
+// prompt: "exp_parser.c prints IFJcode with printf, I want it to build an
+//          expression tree with types for my colleague doing the code
+//          generator. Before writing any code, propose the interface first."
 /*
  * Expression tree built by the precedence parser (exp_parser.c).
  * Every node already has its result type checked by semantic analysis.
@@ -77,6 +58,13 @@ typedef enum {
   OP_GEQ     // >=                                 -> LTS + NOTS
 } ExprOp;
 
+// prompt: "Variable in the tree has only a name, so the generator cannot tell
+//          shadowed variables apart. Add a unique id to symtable and pass it
+//          into the tree."
+// prompt: "My colleague needs function calls inside expressions, e.g.
+//          val x = getValue() + 1, print(2 * getValue()) or
+//          return getValue() + 1. Suggest how to add it to my part without
+//          changing the precedence table."
 // one node of the expression tree
 typedef struct ExprNode {
   ExprKind kind;  // what the node is
@@ -104,6 +92,8 @@ typedef struct ExprNode {
   } u;
 } ExprNode;
 
+// prompt: "The interface is fine, you can create separate expr_tree files.
+//          Keep it as basic and simple as possible, but functional."
 // Allocates a zeroed node of given kind and type, NULL on allocation failure
 ExprNode *expr_new(ExprKind kind, data_type type);
 

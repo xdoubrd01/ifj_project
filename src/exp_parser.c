@@ -2,36 +2,6 @@
 // Filename:   exp_parser.c
 // Author:     Jakub Grásgruber <xgrasgj00>
 
-/*
- * exp_parser.c - precedence parser of expressions, builds a typed expression
- *                tree (expr_tree.h) for the code generator
- *
- * Precedence table, stack and the parsing algorithm are my own work.
- * AI (Claude Code, Claude Opus 5.5) was used to rewrite the semantic actions
- * from printf of IFJcode to building the tree and for code review; functions
- * written by AI have "prompt:" above them, my code changed by AI is marked
- * "AI - UPDATED". The precedence table itself was NOT changed by AI.
- * prompt: "Look at origin/development (src/parser.c, src/scanner.h,
- *          src/symtable.h). Rewrite exp_parser.c so that instead of printf it
- *          builds an expression tree with types for my colleague doing the
- *          code generator. Don't change the precedence table, if it needs
- *          a change warn me. Propose the interface first."
- * prompt: "Keep the code as basic and simple as possible, but functional.
- *          Don't change the overall logic of the program, comment the lines
- *          briefly in the same style as the file."
- * prompt: "Check if this part is OK to hand over to the generator colleague,
- *          offer updates for parts that might contain problematic values."
- * prompt: "Add a unique id of the variable (for shadowing) and update my part."
- * prompt: "Add more accurate comments/description of functions, leave
- *          already existing comments."
- * prompt: "Check the comments after my changes, fix the markers"
- * prompt: "My colleague needs function calls inside expressions, e.g.
- *          val x = getValue() + 1, print(2 * getValue()) or
- *          return getValue() + 1. Suggest how to add it to my part without
- *          changing the precedence table."
- * AI - UPDATED: removed top() (unused) and print_ifj_string() (IFJcode string
- *               output belongs to the code generator now) 
- */
 #include "exp_parser.h"
 #include "scanner.h"
 #include "semantic.h"
@@ -178,8 +148,9 @@ static Stack_Item get_top_terminal(void) { // AI - UPDATED: static
   exit(99);
 }
 
-// prompt: (rewrite of exp_parser.c, see header) - bug found by AI while
-//          testing the rewrite on "a + b"
+// prompt: "Rewrite exp_parser.c so that instead of printf it builds an
+//          expression tree with types." - bug found by AI while testing
+//          the rewrite on "a + b"
 // AI - UPDATED: marker was inserted after the topmost non-terminal (or below
 //               '$'), now it is inserted right after the topmost terminal
 // Inserts '<' marker right AFTER the topmost terminal (or stop symbol),
@@ -205,8 +176,9 @@ static void insert_shift_marker(void) {
   stack_top++;
 }
 
-// prompt: (rewrite of exp_parser.c, see header) - stack has to be freed on
-//          error, tokens and subtrees left on the stack leaked
+// prompt: "Rewrite exp_parser.c so that instead of printf it builds an
+//          expression tree with types." - stack has to be freed on error,
+//          tokens and subtrees left on the stack leaked
 // Frees heap data owned by one stack item
 static void free_item(Stack_Item *item) {
   if (item->type == SYM_NON_TERMINAL) {

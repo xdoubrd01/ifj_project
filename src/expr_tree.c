@@ -2,21 +2,6 @@
 // Filename:   expr_tree.c
 // Author:     Jakub Grásgruber <xgrasgj00>
 
-/*
- * expr_tree.c - helper functions for the expression tree (see expr_tree.h)
- *
- * AI: file written with AI (Claude Code, Claude Opus 5.5), after
- *     discussing the interface, checked and adjusted by me, function
- *     descriptions added by me
- * prompt: "You can create the expr_tree files, keep it as basic and simple as
- *          possible, but functional."
- * prompt: "Add more accurate comments/description of functions, leave
- *          already existing comments."
- * prompt: "My colleague needs function calls inside expressions, e.g.
- *          val x = getValue() + 1, print(2 * getValue()) or
- *          return getValue() + 1. Suggest how to add it to my part without
- *          changing the precedence table."
- */
 #include "expr_tree.h"
 #include <stdlib.h>
 
