@@ -3,3 +3,6 @@
 build/*
 ifj26
 ifj
+test-results/*
+token_dump
+*.o

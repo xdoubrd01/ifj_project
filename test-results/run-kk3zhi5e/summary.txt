@@ -1,5 +1,0 @@
-Celkem: 3 | PASS: 3 | FAIL: 0 | PARTIAL: 0
-arguments       PASS= 1 FAIL= 0 PARTIAL= 0
-types           PASS= 1 FAIL= 0 PARTIAL= 0
-undefined       PASS= 1 FAIL= 0 PARTIAL= 0
-Jde o regresní sadu, nikoli důkaz úplné správnosti ani odhad bodového hodnocení.
