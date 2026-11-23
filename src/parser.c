@@ -906,6 +906,8 @@ static void parse_stmt(void) {
         
         parse_block();
         gen_while_end();
+
+        stmt_returns = false;
     }
 
     else if(tok.type == TOKEN_KW_RETURN){
