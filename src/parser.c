@@ -20,6 +20,8 @@ static data_type current_return_type = type_unknown;
 static char *entry_function_name = NULL;
 static bool stmt_returns = false;
 static bool block_returns = false;
+static unsigned block_depth = 0;
+static bool implicit_return_ready = false;
 
 
 typedef enum {
@@ -467,6 +469,7 @@ static void parse_function(ParserRound round) {
 
 static void parse_block(void) {
     expect(TOKEN_INDENT);
+    block_depth++;
 
     if (!symtable_enter_scope(ts)) {
         exit(99);
@@ -480,6 +483,7 @@ static void parse_block(void) {
     expect(TOKEN_DEDENT);
 
     symtable_leave_scope(ts);
+    block_depth--;
     block_returns = safe_return;
 }
 
@@ -666,12 +670,13 @@ static void parse_opt_return_tail(void) {
 
 static void parse_function_body(void){
     if (tok.type == TOKEN_EOL) {
+        implicit_return_ready = false;
         advance();
         parse_block();
 
         if (current_return_type != type_unit &&
             current_return_type != type_unknown &&
-            !block_returns) {
+            !block_returns && !implicit_return_ready) {
             exit(6);
         }
 }
@@ -844,11 +849,32 @@ static void parse_stmt(void) {
         ExprNode *expr = parse_expression_wrapper();
         if (expr == NULL) exit(99);
 
+        data_type expr_type = expr->type;
+        parse_stmt_tail();
+
+        bool is_implicit_return = block_depth == 1 &&
+            tok.type == TOKEN_DEDENT &&
+            current_return_type != type_unit &&
+            current_return_type != type_unknown;
+
+        if (is_implicit_return &&
+            expr_type != current_return_type &&
+            !(current_return_type == type_double && expr_type == type_int)) {
+            expr_free(expr);
+            exit(6);
+        }
+
         process_expr_node(expr);
-        gen_inst1("POPS", "GF@%tmp_res");
+        if (is_implicit_return) {
+            if (current_return_type == type_double && expr_type == type_int) {
+                gen_inst0("INT2FLOATS");
+            }
+            implicit_return_ready = true;
+        } else {
+            gen_inst1("POPS", "GF@%tmp_res");
+        }
 
         expr_free(expr);
-        parse_stmt_tail();
     }
 
     else syntax_error();
