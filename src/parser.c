@@ -824,7 +824,13 @@ static void parse_function_body(void){
     }
 
     expr_free(expr);
-    expect(TOKEN_EOL);
+    if (tok.type == TOKEN_EOL) {
+        advance();
+    } 
+
+    else if (tok.type != TOKEN_EOF) {
+        syntax_error();
+        }
     }
 
     else{
