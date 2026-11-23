@@ -174,14 +174,15 @@ int sem_check_call(SymTable *st, const char *name, ExprNode **args, size_t argc,
   }
   for (size_t i = 0; i < argc; i++) {
     data_type expected = func->data.func.params[i];
+    // AI - UPDATED: wrong type of a typed parameter is 5, checked first
+    if (!symtable_type_compatible(expected, args[i]->type)) {
+      fprintf(stderr, "Semantic error(5): Wrong argument type of '%s'\n", name);
+      return 5;
+    }
     if (args[i]->type == type_bool) {
       // relation can be used only directly in if / while
       fprintf(stderr, "Semantic error(6): Boolean argument of '%s'\n", name);
       return 6;
-    }
-    if (!symtable_type_compatible(expected, args[i]->type)) {
-      fprintf(stderr, "Semantic error(5): Wrong argument type of '%s'\n", name);
-      return 5;
     }
     if (expected != type_any) {
       int rc = sem_coerce_expr(&args[i], expected); // Int -> Double
@@ -230,7 +231,7 @@ int sem_binary_op(TokenType op, ExprNode **left, ExprNode **right,
       return 0;
     }
     if (!are_numeric) {
-      fprintf(stderr, "Semantic Error (6): Incompatible types for arithmetic "
+      fprintf(stderr, "Semantic error(6): Incompatible types for arithmetic "
                       "operation.\n");
       return 6;
     }
@@ -272,7 +273,7 @@ int sem_binary_op(TokenType op, ExprNode **left, ExprNode **right,
         return rc;
       }
     } else if (!are_strings && !(is_equality && are_same)) {
-      fprintf(stderr, "Semantic Error (6): Incompatible types for relational "
+      fprintf(stderr, "Semantic error(6): Incompatible types for relational "
                       "operation.\n");
       return 6;
     }

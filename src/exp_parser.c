@@ -133,13 +133,13 @@ static void reserve_stack(size_t required) {
   if (required > INT_MAX ||
       !array_next_capacity(stack_capacity, required, sizeof(*stack), 64,
                            &capacity)) {
-    fprintf(stderr, "Stack overflow\n");
+    fprintf(stderr, "Internal error (99): expression stack is too large\n");
     exit(99);
   }
 
   Stack_Item *grown = realloc(stack, capacity * sizeof(*grown));
   if (grown == NULL) {
-    fprintf(stderr, "Stack overflow\n");
+    fprintf(stderr, "Internal error (99): out of memory\n");
     exit(99);
   }
   stack = grown;
@@ -315,6 +315,8 @@ static int make_term_node(SymTable *st, Stack_Item *item, ExprNode **out) {
 static int read_call_token(Token *current) {
   int rc = get_next_token(current);
   if (rc != 0) {
+    fprintf(stderr, "%s error while getting the next token\n",
+            rc == 1 ? "Lexical" : "Internal");
     current->type = TOKEN_EOF;
   }
   return rc;
@@ -338,6 +340,7 @@ static int parse_call(SymTable *st, int item_index, Token *current) {
     }
     ExprNode **grown = realloc(args, (argc + 1) * sizeof(ExprNode *));
     if (grown == NULL) {
+      fprintf(stderr, "Internal error (99): out of memory\n");
       expr_free(arg);
       rc = 99;
       break;
@@ -470,7 +473,8 @@ int parse_expression(SymTable *st, Token *pending, Token *tok, // AI - UPDATED
       // AI - UPDATED: read_token instead of get_next_token (pending token
       // first)
       if ((rc = read_token(&current_token, tok, &use_saved)) != 0) {
-        fprintf(stderr, "Lexical error while getting the next token\n");
+        fprintf(stderr, "%s error while getting the next token\n",
+                rc == 1 ? "Lexical" : "Internal");
         current_token.type = TOKEN_EOF; // attributes are invalid
         goto error;
       }
@@ -497,7 +501,8 @@ int parse_expression(SymTable *st, Token *pending, Token *tok, // AI - UPDATED
       // AI - UPDATED: read_token instead of get_next_token (pending token
       // first)
       if ((rc = read_token(&current_token, tok, &use_saved)) != 0) {
-        fprintf(stderr, "Lexical error while getting the next token\n");
+        fprintf(stderr, "%s error while getting the next token\n",
+                rc == 1 ? "Lexical" : "Internal");
         current_token.type = TOKEN_EOF; // attributes are invalid
         goto error;
       }
