@@ -1,5 +1,0 @@
-import ifj26.*
-@main def run(): Unit =
-    val x: Double = 2
-    val s = toStr(x)
-    print(s)

@@ -1,5 +1,0 @@
-import ifj26.*
-@main def run(): Unit =
-    var x = 1
-    x = x + 2
-    print(x)

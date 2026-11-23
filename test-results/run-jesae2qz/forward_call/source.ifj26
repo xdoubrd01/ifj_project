@@ -1,5 +1,0 @@
-import ifj26.*
-@main def run(): Unit =
-    val x = twice(3)
-    print(x)
-def twice(n: Int): Int = n * 2

@@ -1,4 +1,0 @@
-import ifj26.*
-@main def run(): Unit =
-    val x = 1 /* outer /* inner */ outer */ + 2
-    print(x)

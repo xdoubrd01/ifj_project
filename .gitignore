@@ -1,2 +1,12 @@
 *:Zone.Identifier
 .build*
+.idea/
+build/
+cmake-build-*/
+/ifj26
+/ifj
+/token_dump
+/test-results/
+/tests/results/
+__pycache__/
+*.pyc

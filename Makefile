@@ -27,11 +27,39 @@ clean:
 	rm -f $(TARGET)
 
 -include $(DEPS)
+PYTHON ?= python3
+INTERPRETER ?=
 
-.PHONY: test test-full
+.PHONY: test test-full test-helpers test-tables test-scanner test-expressions test-semantic test-parser test-semantic-programs test-codegen test-integration
 
-test: all
-	bash test_parser.sh
+test:
+	$(PYTHON) tests/run_tests.py --suite all $(if $(strip $(INTERPRETER)),--interpreter "$(INTERPRETER)",) $(TEST_ARGS)
 
-test-full: all
-	python3 test_ifj26.py --compiler ./$(TARGET)
+test-full: test
+
+test-helpers:
+	$(PYTHON) tests/run_tests.py --suite helpers $(if $(strip $(INTERPRETER)),--interpreter "$(INTERPRETER)",) $(TEST_ARGS)
+
+test-tables:
+	$(PYTHON) tests/run_tests.py --suite tables $(if $(strip $(INTERPRETER)),--interpreter "$(INTERPRETER)",) $(TEST_ARGS)
+
+test-scanner:
+	$(PYTHON) tests/run_tests.py --suite scanner $(if $(strip $(INTERPRETER)),--interpreter "$(INTERPRETER)",) $(TEST_ARGS)
+
+test-expressions:
+	$(PYTHON) tests/run_tests.py --suite expressions $(if $(strip $(INTERPRETER)),--interpreter "$(INTERPRETER)",) $(TEST_ARGS)
+
+test-semantic:
+	$(PYTHON) tests/run_tests.py --suite semantic $(if $(strip $(INTERPRETER)),--interpreter "$(INTERPRETER)",) $(TEST_ARGS)
+
+test-parser:
+	$(PYTHON) tests/run_tests.py --suite parser $(if $(strip $(INTERPRETER)),--interpreter "$(INTERPRETER)",) $(TEST_ARGS)
+
+test-semantic-programs:
+	$(PYTHON) tests/run_tests.py --suite semantic_programs $(if $(strip $(INTERPRETER)),--interpreter "$(INTERPRETER)",) $(TEST_ARGS)
+
+test-codegen:
+	$(PYTHON) tests/run_tests.py --suite codegen $(if $(strip $(INTERPRETER)),--interpreter "$(INTERPRETER)",) $(TEST_ARGS)
+
+test-integration:
+	$(PYTHON) tests/run_tests.py --suite integration $(if $(strip $(INTERPRETER)),--interpreter "$(INTERPRETER)",) $(TEST_ARGS)
