@@ -25,6 +25,10 @@
  * prompt: "Add more accurate comments/description of functions, leave
  *          already existing comments."
  * prompt: "Check the comments after my changes, fix the markers"
+ * prompt: "My colleague needs function calls inside expressions, e.g.
+ *          val x = getValue() + 1, print(2 * getValue()) or
+ *          return getValue() + 1. Suggest how to add it to my part without
+ *          changing the precedence table."
  * AI - UPDATED: removed top() (unused) and print_ifj_string() (IFJcode string
  *               output belongs to the code generator now) 
  */
@@ -208,17 +212,22 @@ static void free_item(Stack_Item *item) {
   if (item->type == SYM_NON_TERMINAL) {
     expr_free(item->node); // subtree
     item->node = NULL;
-  } else if (item->type == SYM_TERMINAL &&
-             (item->token_type == TOKEN_IDENTIFIER ||
-              item->token_type == TOKEN_STRING_LITERAL)) {
-    free(item->token.attribute.s_val); // lexeme from scanner
-    item->token.attribute.s_val = NULL;
+  } else if (item->type == SYM_TERMINAL) {
+    // AI - UPDATED: terminal can hold a finished function call (FUNEXP)
+    expr_free(item->node);
+    item->node = NULL;
+    if (item->token_type == TOKEN_IDENTIFIER ||
+        item->token_type == TOKEN_STRING_LITERAL) {
+      free(item->token.attribute.s_val); // lexeme from scanner
+      item->token.attribute.s_val = NULL;
+    }
   }
 }
 
 // Empties the stack and frees everything in it (used on error)
-static void stack_clear(void) {
-  while (stack_top >= 0) {
+// AI - UPDATED: only down to base, lower items belong to the outer expression
+static void stack_clear(int base) {
+  while (stack_top >= base) {
     free_item(&stack[stack_top]);
     stack_top--;
   }
@@ -245,6 +254,13 @@ static int make_term_node(SymTable *st, Stack_Item *item, ExprNode **out) {
   data_type type;
   unsigned id; // unique variable id from symtable
   int rc;
+
+  // AI - UPDATED: function call, its node was already built by parse_call
+  if (item->node != NULL) {
+    *out = item->node;
+    item->node = NULL;
+    return 0;
+  }
 
   switch (item->token_type) {
   case TOKEN_INT_LITERAL:
@@ -293,6 +309,87 @@ static int make_term_node(SymTable *st, Stack_Item *item, ExprNode **out) {
   return 0;
 }
 
+// prompt: "My colleague needs function calls inside expressions, e.g.
+//          val x = getValue() + 1, print(2 * getValue()) or
+//          return getValue() + 1. Suggest how to add it to my precedence
+//          parser without changing the precedence table."
+// Reads the next token of a call; attributes are invalid after a lexical error
+static int read_call_token(Token *current) {
+  int rc = get_next_token(current);
+  if (rc != 0) {
+    current->type = TOKEN_EOF;
+  }
+  return rc;
+}
+
+// prompt: (same as read_call_token) - arguments are parsed recursively, the
+//          whole call is then one operand (table column "value")
+// Parses "( args )" of the identifier stored in stack[item_index]
+// current: in = '(', out = first token after ')'
+static int parse_call(SymTable *st, int item_index, Token *current) {
+  ExprNode **args = NULL; // parsed arguments
+  size_t argc = 0;        // number of parsed arguments
+  data_type type;         // return type of the called function
+  int rc = read_call_token(current);
+
+  while (rc == 0 && current->type != TOKEN_RPAREN) {
+    ExprNode *arg = NULL;
+    // one argument, stops at ',' or ')'
+    if ((rc = parse_expression(st, NULL, current, &arg)) != 0) {
+      break;
+    }
+    ExprNode **grown = realloc(args, (argc + 1) * sizeof(ExprNode *));
+    if (grown == NULL) {
+      expr_free(arg);
+      rc = 99;
+      break;
+    }
+    args = grown;
+    args[argc++] = arg;
+    if (current->type != TOKEN_COMMA) {
+      break; // ')' is checked below
+    }
+    if ((rc = read_call_token(current)) != 0) {
+      break;
+    }
+    // trailing comma only when ')' is on another line
+    if (current->type == TOKEN_RPAREN && !current->newline_before) {
+      fprintf(stderr, "Syntax error: trailing comma on the same line\n");
+      rc = 2;
+    }
+  }
+  if (rc == 0 && current->type != TOKEN_RPAREN) {
+    fprintf(stderr, "Syntax error: expected ')' after arguments\n");
+    rc = 2;
+  }
+  if (rc == 0) {
+    // function exists, argument count and types (3 / 5 / 6)
+    rc = sem_check_call(st, stack[item_index].token.attribute.s_val, args, argc,
+                        &type);
+  }
+
+  ExprNode *call = (rc == 0) ? expr_new(EXPR_CALL, type) : NULL;
+  if (rc == 0 && call == NULL) {
+    fprintf(stderr, "Internal error (99): out of memory\n");
+    rc = 99;
+  }
+  if (rc != 0) {
+    for (size_t i = 0; i < argc; i++) {
+      expr_free(args[i]);
+    }
+    free(args);
+    return rc; // *current stays owned by the caller
+  }
+
+  call->u.call.name = stack[item_index].token.attribute.s_val; // ownership
+  stack[item_index].token.attribute.s_val = NULL;
+  call->u.call.args = args;
+  call->u.call.argc = argc;
+  stack[item_index].node = call; // E -> term takes it in make_term_node
+
+  return read_call_token(current); // token after ')'
+}
+
 // prompt: "Rewrite parse_expression so that instead of printf it builds the
 //          tree and the types are checked in semantic.c." + (answer to AI)
 //          "Returning codes instead of exit() is fine."
@@ -303,8 +400,9 @@ static int make_term_node(SymTable *st, Stack_Item *item, ExprNode **out) {
 int parse_expression(SymTable *st, Token *pending, Token *tok, // AI - UPDATED
                      ExprNode **out) {
   // AI - UPDATED: variables for the error label, stack reset
-  *out = NULL;                // nothing on error
-  stack_top = -1;             // reset stack from previous call
+  *out = NULL; // nothing on error
+  // AI - UPDATED: base instead of stack reset, call arguments are nested
+  int base = stack_top + 1;   // first stack index of this expression
   int rc = 0;                 // error code for the error label
   bool use_saved = false;     // *tok still waits to be read
   Stack_Item popped_items[4]; // handle of the current reduction
@@ -344,7 +442,8 @@ int parse_expression(SymTable *st, Token *pending, Token *tok, // AI - UPDATED
         (column_idx == PREC_IDX_EOF || current_token.type == TOKEN_RPAREN);
 
     if (is_stop_token && top_terminal.prec_idx == PREC_IDX_EOF) {
-      if (stack_top == 1 && stack[1].type == SYM_NON_TERMINAL) {
+      // AI - UPDATED: relative to base (nested call arguments)
+      if (stack_top == base + 1 && stack[base + 1].type == SYM_NON_TERMINAL) {
         break; // END OF WHILE CYCLE
       } else {
         fprintf(stderr, "Syntax error: invalid or empty expression\n");
@@ -378,6 +477,14 @@ int parse_expression(SymTable *st, Token *pending, Token *tok, // AI - UPDATED
         goto error;
       }
 
+      // AI - UPDATED: identifier followed by '(' is a function call (FUNEXP)
+      if (new_item.token_type == TOKEN_IDENTIFIER &&
+          current_token.type == TOKEN_LPAREN) {
+        if ((rc = parse_call(st, stack_top, &current_token)) != 0) {
+          goto error;
+        }
+      }
+
       // match
     } else if (precedence_relation == '=') {
       Stack_Item new_item = {.type = SYM_TERMINAL,
@@ -402,7 +509,8 @@ int parse_expression(SymTable *st, Token *pending, Token *tok, // AI - UPDATED
       pop_count = 0; // AI - UPDATED: popped_items declared at the top
       bool found_shift_marker = false;
 
-      while (stack_top >= 0) {
+      // AI - UPDATED: never pop below this expression
+      while (stack_top > base) {
         Stack_Item item = pop();
         if (item.type == SYM_SHIFT_MARKER) {
           found_shift_marker = true;
@@ -516,7 +624,17 @@ int parse_expression(SymTable *st, Token *pending, Token *tok, // AI - UPDATED
           goto error;
         }
 
-        if (popped_items[1].token_type == TOKEN_MINUS) {
+        // AI - UPDATED: minus on a literal is folded, -2147483648 stays valid
+        ExprNode *operand = popped_items[0].node;
+        if (popped_items[1].token_type == TOKEN_MINUS &&
+            operand->kind == EXPR_INT_LIT) {
+          operand->u.i_val = (int)(-(long long)operand->u.i_val);
+          new_item.node = operand;
+        } else if (popped_items[1].token_type == TOKEN_MINUS &&
+                   operand->kind == EXPR_DOUBLE_LIT) {
+          operand->u.d_val = -operand->u.d_val;
+          new_item.node = operand;
+        } else if (popped_items[1].token_type == TOKEN_MINUS) {
           new_item.node = expr_new(EXPR_NEG, popped_items[0].node->type);
           if (new_item.node == NULL) {
             fprintf(stderr, "Internal error (99): out of memory\n");
@@ -545,9 +663,10 @@ int parse_expression(SymTable *st, Token *pending, Token *tok, // AI - UPDATED
   } // END OF WHILE CYCLE (1)
 
   // AI - UPDATED: return the tree, error label frees everything
-  *out = stack[1].node; // finished tree ($ E on the stack)
-  stack[1].node = NULL;
-  stack_top = -1;
+  // AI - UPDATED: tree is at base + 1, outer expression stays on the stack
+  *out = stack[base + 1].node; // finished tree ($ E on the stack)
+  stack[base + 1].node = NULL;
+  stack_top = base - 1;
   *tok = current_token; // Save remaining token, wich ended parsing
   return 0;             // Successful parsing
 
@@ -555,7 +674,8 @@ error:
   for (int i = 0; i < pop_count; i++) {
     free_item(&popped_items[i]); // items of unfinished reduction
   }
-  stack_clear();        // everything still on the stack
+  // AI - UPDATED: clears only items of this expression
+  stack_clear(base);    // everything still on the stack
   *tok = current_token; // caller owns the token where we stopped
   return rc;
 }

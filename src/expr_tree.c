@@ -12,6 +12,10 @@
  *          possible, but functional."
  * prompt: "Add more accurate comments/description of functions, leave
  *          already existing comments."
+ * prompt: "My colleague needs function calls inside expressions, e.g.
+ *          val x = getValue() + 1, print(2 * getValue()) or
+ *          return getValue() + 1. Suggest how to add it to my part without
+ *          changing the precedence table."
  */
 #include "expr_tree.h"
 #include <stdlib.h>
@@ -51,6 +55,14 @@ void expr_free(ExprNode *node) {
   case EXPR_NEG:
   case EXPR_INT2FLOAT:
     expr_free(node->u.operand); // single operand
+    break;
+  // AI - UPDATED: arguments and name of the called function
+  case EXPR_CALL:
+    for (size_t i = 0; i < node->u.call.argc; i++) {
+      expr_free(node->u.call.args[i]);
+    }
+    free(node->u.call.args);
+    free(node->u.call.name);
     break;
   default:
     break; // literals without heap data
@@ -127,6 +139,15 @@ void expr_dump(const ExprNode *node, FILE *out) {
   case EXPR_INT2FLOAT:
     fprintf(out, "(int2float ");
     expr_dump(node->u.operand, out);
+    fprintf(out, ")");
+    break;
+  // AI - UPDATED: function call
+  case EXPR_CALL:
+    fprintf(out, "(call %s %s", node->u.call.name, type_name(node->type));
+    for (size_t i = 0; i < node->u.call.argc; i++) {
+      fprintf(out, " ");
+      expr_dump(node->u.call.args[i], out);
+    }
     fprintf(out, ")");
     break;
   }

@@ -19,6 +19,10 @@
  *          into the tree."
  * prompt: "Add more accurate comments/description of functions, leave
  *          already existing comments."
+ * prompt: "My colleague needs function calls inside expressions, e.g.
+ *          val x = getValue() + 1, print(2 * getValue()) or
+ *          return getValue() + 1. Suggest how to add it to my part without
+ *          changing the precedence table."
  */
 #ifndef EXPR_TREE_H
 #define EXPR_TREE_H
@@ -38,6 +42,9 @@
  *  - result of a relational operator has type type_bool
  *  - EXPR_VAR carries u.var.id from the symbol table: same name in different
  *    scopes (shadowing) has a different id, e.g. use LF@name$id
+ *  - AI - UPDATED: EXPR_CALL pushes arguments left to right, then CALL;
+ *    exactly one result stays on the data stack. Int -> Double conversion
+ *    of arguments is already in the tree.
  */
 
 // kind of node
@@ -49,7 +56,9 @@ typedef enum {
   EXPR_VAR,        // variable / parameter   -> u.var (name + id)
   EXPR_BINARY,     // binary operation       -> u.bin
   EXPR_NEG,        // unary minus            -> u.operand
-  EXPR_INT2FLOAT   // implicit Int -> Double -> u.operand
+  EXPR_INT2FLOAT,  // implicit Int -> Double -> u.operand
+  // AI - UPDATED: function call (FUNEXP)
+  EXPR_CALL // function call          -> u.call
 } ExprKind;
 
 // resolved binary operator
@@ -86,6 +95,12 @@ typedef struct ExprNode {
       struct ExprNode *right; // right operand
     } bin;                    // EXPR_BINARY
     struct ExprNode *operand; // EXPR_NEG, EXPR_INT2FLOAT
+    // AI - UPDATED: called function and its arguments (FUNEXP)
+    struct {
+      char *name;             // called function (owned by node)
+      struct ExprNode **args; // arguments, evaluated left to right (owned)
+      size_t argc;            // number of arguments
+    } call;                   // EXPR_CALL
   } u;
 } ExprNode;
 
