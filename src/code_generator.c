@@ -9,12 +9,7 @@
 #include "expr_tree.h"
 #include "code_buffer.h"
 #include "code_generator.h"
-
-typedef struct {
-    int cnt;       // celkový počet doteraz videných ifov (1, 2, 3...)
-    int stack[256];    // zásobník ID aktuálne vnorených ifov (príp. dynamické pole)
-    int stack_top;     // index vrcholu zásobníka (-1 = prázdny)
-} LabelCounter;
+#include "code_label_counter.h"
 
 LabelCounter if_counter;
 LabelCounter while_counter;
@@ -500,9 +495,7 @@ void gen_func_end(void) {
 
 // AI-ASSISTED START
 void gen_if_start(ExprNode *expr) {
-    int current_id = if_counter.cnt++;
-    if_counter.stack[if_counter.stack_top] = current_id;
-    if_counter.stack_top++;
+    size_t current_id = label_push(&if_counter);
 
     process_expr_node(expr);
     buffer_append_string(&code_buff, "PUSHS bool@false\n");
@@ -510,14 +503,14 @@ void gen_if_start(ExprNode *expr) {
 }
 
 void gen_if_else(void) {
-    int current_id = if_counter.stack[if_counter.stack_top - 1];
+    size_t current_id = label_top(&if_counter);
 
     buffer_append_format(&code_buff, "JUMP $if_skip_%d\n", current_id);
     buffer_append_format(&code_buff, "LABEL $else_%d\n", current_id);
 }
 
 void gen_if_end(void) {
-    int current_id = if_counter.stack[--if_counter.stack_top];
+    size_t current_id = label_pop(&if_counter);
 
     buffer_append_format(&code_buff, "LABEL $if_skip_%d\n", current_id);
 }
@@ -526,11 +519,8 @@ void gen_if_end(void) {
 // -----    WHILE LOOP                      -----
 
 void gen_while_start(ExprNode *expr) {
-    int current_id = while_counter.cnt++;
-    while_counter.stack[while_counter.stack_top] = current_id;
-    while_counter.stack_top++;
+    size_t current_id = label_push(&while_counter);
 
-    // TODO: GENERATE VARIABLES BEFORE LABEL (waiting for parser and symtable adjustment)
     buffer_append_format(&code_buff, "LABEL $while_start_%d\n", current_id);
 
     process_expr_node(expr);
@@ -539,7 +529,7 @@ void gen_while_start(ExprNode *expr) {
 }
 
 void gen_while_end(void) {
-    int current_id = while_counter.stack[--while_counter.stack_top];
+    size_t current_id = label_pop(&while_counter);
 
     buffer_append_format(&code_buff, "JUMP $while_start_%d\n", current_id);
     buffer_append_format(&code_buff, "LABEL $while_end_%d\n", current_id);
