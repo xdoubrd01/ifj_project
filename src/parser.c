@@ -193,13 +193,15 @@ void parse(const char *input, size_t length) {
 
 
 static void parse_functions(ParserRound round) {
-    while(tok.type == TOKEN_EOL){
+    while (tok.type == TOKEN_EOL) {
         advance();
     }
 
-    if (tok.type == TOKEN_KW_DEF || tok.type == TOKEN_AT_MAIN){
-    parse_function(round);
-    parse_functions(round);
+    while (tok.type == TOKEN_KW_DEF || tok.type == TOKEN_AT_MAIN) {
+        parse_function(round);
+        while (tok.type == TOKEN_EOL) {
+            advance();
+        }
     }
 }
 
@@ -508,7 +510,7 @@ static data_type parse_type(void) {
 }
 
 static int is_non_id_expression(TokenType t){
-    if (t == TOKEN_STRING_LITERAL || t == TOKEN_DOUBLE_LITERAL || t == TOKEN_INT_LITERAL || t == TOKEN_MINUS || t == TOKEN_LPAREN ){
+    if (t == TOKEN_STRING_LITERAL || t == TOKEN_DOUBLE_LITERAL || t == TOKEN_INT_LITERAL || t == TOKEN_MINUS || t == TOKEN_PLUS || t == TOKEN_LPAREN ){
         return 1;
     }
     else{
@@ -732,7 +734,7 @@ static void parse_stmt(void) {
 
         char *var_name = strdup(tok.attribute.s_val); // vlastni kopie jmena pred advance()
 
-        if(var_name == NULL) syntax_error();
+        if(var_name == NULL) exit(99);
         
         expect(TOKEN_IDENTIFIER);
         data_type var_type = parse_opt_type();
