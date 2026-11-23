@@ -74,7 +74,6 @@ static void parse_term(void);
 static void parse_expr_tail(void);
 static void parse_call_arguments_tail(void);
 static void parse_call_arguments(void);
-static void parse_non_id_expression(void);
 static int is_non_id_expression(TokenType t);
 static data_type parse_function_call(void);
 static data_type parse_call_or_exp(ExprNode **out_expr);
@@ -577,15 +576,6 @@ static void parse_call_arguments(void) {
 }
 // AI ASSISTED END
 
-static void parse_non_id_expression(void){
-  if (tok.type == TOKEN_DOUBLE_LITERAL ||
-        tok.type == TOKEN_STRING_LITERAL || tok.type == TOKEN_INT_LITERAL) {
-        advance();
-    } else {
-        syntax_error();
-    }
-}
-
 static int is_non_id_expression(TokenType t){
     if (t == TOKEN_STRING_LITERAL || t == TOKEN_DOUBLE_LITERAL || t == TOKEN_INT_LITERAL || t == TOKEN_MINUS || t == TOKEN_LPAREN ){
         return 1;
@@ -811,10 +801,9 @@ static ExprNode *parse_expression_wrapper(void) {
 }
 
 static void parse_opt_return_tail(void) {
-    if (tok.type == TOKEN_EOL || tok.type == TOKEN_SEMICOLON) {
+    if (tok.type == TOKEN_EOL || tok.type == TOKEN_SEMICOLON || tok.type == TOKEN_DEDENT || tok.type == TOKEN_EOF) {
 
-        if (current_return_type != type_unit &&
-            current_return_type != type_unknown) {
+        if (current_return_type != type_unit && current_return_type != type_unknown) {
             exit(6);
         }
 
@@ -879,6 +868,10 @@ static void parse_function_body(void){
 
     expr_free(expr);
     expect(TOKEN_EOL);
+    }
+
+    else{
+        syntax_error();
     }
 }
 
@@ -996,25 +989,45 @@ static void parse_stmt(void) {
         char *var_name = strdup(tok.attribute.s_val);
         if (var_name == NULL) exit(99);
 
-        advance();
-        parse_stmt_tail_id(var_name);
+            advance();
+            parse_stmt_tail_id(var_name);
 
-        free(var_name);
+            free(var_name);
+        }
     }
-}
 
-    else if(is_non_id_expression(tok.type) == 1){
-        parse_non_id_expression();
+    
+    // AI ASSISTED START
+    // AI PROMPT:
+    // oprav zpracovani samostatnych vyrazovych prikazu
+    // v parse_stmt(). Misto jednoho tokenu zpracuj cely
+    // vyraz pomoci existujiciho precedencniho parseru.
+    // Vysledek vyrazu se nepouziva.
+
+    else if (is_non_id_expression(tok.type)) {
+        ExprNode *expr = parse_expression_wrapper();
+
+        if (expr == NULL) {
+            exit(99);
+        }
+
+        process_expr_node(expr);
+
+        // Vysledek samostatneho vyrazu se zahodi.
+        gen_inst1("POPS", "GF@%tmp_res");
+
+        expr_free(expr);
         parse_stmt_tail();
     }
+
+    // AI ASSISTED END
 
     else syntax_error();
 
 }
 
 static void parse_stmts(void) {
-    if(is_stmt_start(tok.type) == 1){
+    while (is_stmt_start(tok.type)){
         parse_stmt();
-        parse_stmts();
     }
 }
