@@ -1,7 +1,8 @@
 /**
  *@authors Denis Doubrava xdoubrd01
  *         Eliáš Oharek   xohare00
- * Tvorba komentářů byla za pomoci umělé inteligence: překlad, formátování a lepší formulace vět
+ * Tvorba komentářů byla za pomoci umělé inteligence: překlad, formátování a
+ * lepší formulace vět
  */
 
 /**
@@ -13,6 +14,7 @@
 
 #include "symtable.h"
 #include "hashtable.h"
+#include "str_utils.h"
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -313,7 +315,8 @@ bool symtable_insert_var(SymTable *table, const char *key, data_type type, bool 
         return false;
     }
 
-    /* Reject duplicates here while allowing names from outer scopes to be hidden. */
+    /* Reject duplicates here while allowing names from outer scopes to be hidden.
+     */
     if (symtable_search_current_var(table, key) != NULL) {
         return false;
     }
@@ -477,21 +480,12 @@ bool symtable_set_func_param_names(SymTable *table, const char *key, size_t para
     }
 
     for (size_t i = 0; i < param_count; ++i) {
-        size_t length = strlen(param_names[i]);
+        copies[i] = string_duplicate(param_names[i]);
 
-        if (length == SIZE_MAX) {
-            free_param_names(copies, i);
-            return false;
-        }
-
-        copies[i] = malloc(length + 1);
         if (copies[i] == NULL) {
-            // Only entries before i have been initialized successfully.
             free_param_names(copies, i);
             return false;
         }
-
-        memcpy(copies[i], param_names[i], length + 1);
     }
 
     // Publish only the complete replacement; inputs may alias the old names.
@@ -581,7 +575,8 @@ bool symtable_type_compatible(data_type expected, data_type actual) {
         return false;
     }
 
-    /* After unresolved types are rejected, expected Any accepts the actual type. */
+    /* After unresolved types are rejected, expected Any accepts the actual type.
+     */
     if (expected == type_any) {
         return true;
     }

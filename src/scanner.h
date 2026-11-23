@@ -61,21 +61,21 @@ typedef enum {
     TOKEN_TYPE_UNIT,
 
     // Operators and separators
-    TOKEN_ASSIGN,  // =
-    TOKEN_PLUS,    // +
-    TOKEN_MINUS,   // -
-    TOKEN_MUL,     // *
-    TOKEN_DIV,     // /
-    TOKEN_EQ,      // ==
-    TOKEN_NEQ,     // !=
-    TOKEN_LT,      // <
-    TOKEN_LEQ,     // <=
-    TOKEN_GT,      // >
-    TOKEN_GEQ,     // >=
-    TOKEN_LPAREN,  // (
-    TOKEN_RPAREN,  // )
-    TOKEN_COLON,   // :
-    TOKEN_COMMA,   // ,
+    TOKEN_ASSIGN, // =
+    TOKEN_PLUS,   // +
+    TOKEN_MINUS,  // -
+    TOKEN_MUL,    // *
+    TOKEN_DIV,    // /
+    TOKEN_EQ,     // ==
+    TOKEN_NEQ,    // !=
+    TOKEN_LT,     // <
+    TOKEN_LEQ,    // <=
+    TOKEN_GT,     // >
+    TOKEN_GEQ,    // >=
+    TOKEN_LPAREN, // (
+    TOKEN_RPAREN, // )
+    TOKEN_COLON,  // :
+    TOKEN_COMMA,  // ,
 
     // Additional punctuation and the entry-point annotation
     TOKEN_DOT,       // .
