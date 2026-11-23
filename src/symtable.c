@@ -1,7 +1,8 @@
 /**
  *@authors Denis Doubrava xdoubrd01
  *         Eliáš Oharek   xohare00
- * Tvorba komentářů byla za pomoci umělé inteligence: překlad, formátování a lepší formulace vět
+ * Tvorba komentářů byla za pomoci umělé inteligence: překlad, formátování a
+ * lepší formulace vět
  */
 
 /**
@@ -13,6 +14,7 @@
 
 #include "symtable.h"
 #include "hashtable.h"
+#include "str_utils.h"
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -306,14 +308,15 @@ symbol_data *symtable_search_func(SymTable *table, const char *key) {
     return symbol;
 }
 
-/* Symbol registration. */
-
-bool symtable_insert_var(SymTable *table, const char *key, data_type type, bool is_mutable) {
+/* Shared insertion for local variables and function parameters. */
+static bool insert_local_variable(SymTable *table, const char *key, data_type type, bool is_mutable,
+                                  bool is_parameter) {
     if (table == NULL || table->current_scope == NULL || key == NULL) {
         return false;
     }
 
-    /* Reject duplicates here while allowing names from outer scopes to be hidden. */
+    /* Reject duplicates here while allowing names from outer scopes to be hidden.
+     */
     if (symtable_search_current_var(table, key) != NULL) {
         return false;
     }
@@ -334,7 +337,7 @@ bool symtable_insert_var(SymTable *table, const char *key, data_type type, bool 
     symbol->type                  = sym_var;
     symbol->data.var.var_type     = type;
     symbol->data.var.is_mutable   = is_mutable;
-    symbol->data.var.is_parameter = false;
+    symbol->data.var.is_parameter = is_parameter;
     symbol->data.var.id           = table->next_var_id;
 
     /* Release the new record if insertion cannot take ownership of it. */
@@ -351,40 +354,12 @@ bool symtable_insert_var(SymTable *table, const char *key, data_type type, bool 
     return true;
 }
 
+bool symtable_insert_var(SymTable *table, const char *key, data_type type, bool is_mutable) {
+    return insert_local_variable(table, key, type, is_mutable, false);
+}
+
 bool symtable_insert_param(SymTable *table, const char *key, data_type type) {
-    if (table == NULL || table->current_scope == NULL || key == NULL) {
-        return false;
-    }
-
-    /* Parameters and ordinary variables share the current scope namespace. */
-    if (symtable_search_current_var(table, key) != NULL) {
-        return false;
-    }
-
-    symbol_data *symbol = malloc(sizeof(*symbol));
-    if (symbol == NULL) {
-        return false;
-    }
-
-    /*
-     * A parameter is represented as a variable with additional metadata.
-     * Parameters are immutable regardless of how ordinary variables are handled.
-     */
-    symbol->type                  = sym_var;
-    symbol->data.var.var_type     = type;
-    symbol->data.var.is_mutable   = false;
-    symbol->data.var.is_parameter = true;
-    symbol->data.var.id           = table->next_var_id;
-
-    /* Failed insertion leaves cleanup of the new record to this function. */
-    if (!ht_insert(table->current_scope->table, key, symbol)) {
-        free(symbol);
-        return false;
-    }
-
-    /* Parameters share the id sequence with ordinary variables. */
-    table->next_var_id++;
-    return true;
+    return insert_local_variable(table, key, type, false, true);
 }
 
 bool symtable_insert_func(SymTable *table, const char *key, data_type ret_type, size_t param_count,
@@ -477,21 +452,12 @@ bool symtable_set_func_param_names(SymTable *table, const char *key, size_t para
     }
 
     for (size_t i = 0; i < param_count; ++i) {
-        size_t length = strlen(param_names[i]);
+        copies[i] = string_duplicate(param_names[i]);
 
-        if (length == SIZE_MAX) {
-            free_param_names(copies, i);
-            return false;
-        }
-
-        copies[i] = malloc(length + 1);
         if (copies[i] == NULL) {
-            // Only entries before i have been initialized successfully.
             free_param_names(copies, i);
             return false;
         }
-
-        memcpy(copies[i], param_names[i], length + 1);
     }
 
     // Publish only the complete replacement; inputs may alias the old names.
@@ -581,7 +547,8 @@ bool symtable_type_compatible(data_type expected, data_type actual) {
         return false;
     }
 
-    /* After unresolved types are rejected, expected Any accepts the actual type. */
+    /* After unresolved types are rejected, expected Any accepts the actual type.
+     */
     if (expected == type_any) {
         return true;
     }

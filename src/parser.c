@@ -20,6 +20,8 @@ static bool has_lookahead = false;
 static SymTable *ts = NULL;
 static data_type current_return_type = type_unknown;
 static char *entry_function_name = NULL;
+static bool stmt_returns = false;
+static bool block_returns = false;
 
 
 typedef enum {
@@ -62,7 +64,7 @@ static data_type parse_opt_return_type(void);
 
 // Bloky, prikazy a navratove hodnoty
 static void parse_block(void);
-static void parse_stmts(void);
+static bool parse_stmts(void);
 static void parse_stmt(void);
 static void parse_stmt_tail(void);
 static void parse_stmt_tail_id(char *var_name);
@@ -74,7 +76,6 @@ static void parse_term(void);
 static void parse_expr_tail(void);
 static void parse_call_arguments_tail(void);
 static void parse_call_arguments(void);
-static void parse_non_id_expression(void);
 static int is_non_id_expression(TokenType t);
 static data_type parse_function_call(void);
 static data_type parse_call_or_exp(ExprNode **out_expr);
@@ -476,11 +477,14 @@ static void parse_block(void) {
     }
 
     parse_stmt();
-    parse_stmts();
+    bool safe_return = stmt_returns;
 
+    if(parse_stmts() == true) safe_return = true;
+    
     expect(TOKEN_DEDENT);
 
     symtable_leave_scope(ts);
+    block_returns = safe_return;
 }
 
 
@@ -542,32 +546,40 @@ static void parse_expr_tail(void){
 
 }
 
-static void parse_call_arguments_tail(void){
- if (tok.type == TOKEN_COMMA) {
+
+// AI ASSISTED START
+// AI PROMPT:
+// Zachovej puvodni pomocne funkce pro parsovani argumentu.
+// Zpracovani skutecnych volani funkci resi parse_function_call().
+
+// Preskoci pripadne layout tokeny uvnitr zavorek.
+static void skip_call_layout(void) {
+    while (tok.type == TOKEN_EOL ||
+           tok.type == TOKEN_INDENT ||
+           tok.type == TOKEN_DEDENT) {
+        advance();
+    }
+}
+
+static void parse_call_arguments_tail(void) {
+    if (tok.type == TOKEN_COMMA) {
         advance();
         parse_term();
         parse_call_arguments_tail();
     }
 }
 
-static void parse_call_arguments(void){
-   if (tok.type == TOKEN_IDENTIFIER || tok.type == TOKEN_INT_LITERAL || 
-        tok.type == TOKEN_DOUBLE_LITERAL || tok.type == TOKEN_STRING_LITERAL || 
+static void parse_call_arguments(void) {
+    if (tok.type == TOKEN_IDENTIFIER ||
+        tok.type == TOKEN_INT_LITERAL ||
+        tok.type == TOKEN_DOUBLE_LITERAL ||
+        tok.type == TOKEN_STRING_LITERAL ||
         tok.type == TOKEN_LPAREN) {
-        
         parse_term();
         parse_call_arguments_tail();
     }
 }
-
-static void parse_non_id_expression(void){
-  if (tok.type == TOKEN_DOUBLE_LITERAL ||
-        tok.type == TOKEN_STRING_LITERAL || tok.type == TOKEN_INT_LITERAL) {
-        advance();
-    } else {
-        syntax_error();
-    }
-}
+// AI ASSISTED END
 
 static int is_non_id_expression(TokenType t){
     if (t == TOKEN_STRING_LITERAL || t == TOKEN_DOUBLE_LITERAL || t == TOKEN_INT_LITERAL || t == TOKEN_MINUS || t == TOKEN_LPAREN ){
@@ -579,96 +591,106 @@ static int is_non_id_expression(TokenType t){
 
 }
 
-// Kontrola poctu a typu argumentu oproti hlavicce funkce.
+
+// AI ASSISTED START
+// AI PROMPT:
+// Rozsir parse_function_call() o vnorena volani funkci v argumentech,
+// napr. print(answer()) a f(g(2)). Zachovej dosavadni podporu
+// viceradkovych argumentu, kontrolu koncove carky podle
+// newline_before, semantickou kontrolu typu a generovani argumentu.
+// Povol implicitni konverzi Int -> Double u argumentu.
 static data_type parse_function_call(void) {
-    if(tok.type == TOKEN_IDENTIFIER){
+    if (tok.type != TOKEN_IDENTIFIER) {
+        syntax_error();
+    }
 
-        char *function_name = strdup(tok.attribute.s_val);
-        if (function_name == NULL) exit(99);
+    char *function_name = strdup(tok.attribute.s_val);
+    if (function_name == NULL) exit(99);
 
-        symbol_data *function = symtable_search_func(ts, function_name);
+    symbol_data *function = symtable_search_func(ts, function_name);
+    if (function == NULL) {
+        fprintf(stderr, "Undefined function: %s\n", function_name);
+        free(function_name);
+        exit(3);
+    }
 
-        if (function == NULL) {
-            fprintf(stderr, "Undefined function: %s\n", function_name);
-            free(function_name);
-            exit(3); 
-        }
-        advance();
-        expect(TOKEN_LPAREN);
+    advance();
+    expect(TOKEN_LPAREN);
+    skip_call_layout();
 
-        size_t arg_count = 0;
-        if (tok.type != TOKEN_RPAREN) {
-            ExprNode *arg = parse_expression_wrapper();
+    size_t arg_count = 0;
+    while (tok.type != TOKEN_RPAREN) {
+        ExprNode *arg = NULL;
+        data_type arg_type;
+
+        // Vnorene volani se zpracuje rekurzivne a samo vlozi
+        // navratovou hodnotu na datovy zasobnik.
+        if (tok.type == TOKEN_IDENTIFIER && peek_token() == TOKEN_LPAREN) {
+            arg_type = parse_function_call();
+        } else {
+            arg = parse_expression_wrapper();
             if (arg == NULL) exit(99);
+            arg_type = arg->type;
+        }
 
-            data_type arg_type = arg->type;
-        
+        if (arg_count >= function->data.func.param_count) {
+            expr_free(arg);
+            free(function_name);
+            exit(5);
+        }
 
-            if (arg_count >= function->data.func.param_count) {
-                free(function_name);
-                expr_free(arg);
-                exit(5);
-            }
+        data_type expected_type = function->data.func.params[arg_count];
+        if (expected_type != type_any && arg_type != expected_type &&
+            !(expected_type == type_double && arg_type == type_int)) {
+            expr_free(arg);
+            free(function_name);
+            exit(5);
+        }
 
-            data_type expected_type = function->data.func.params[arg_count];
-
-            if (expected_type != type_any && arg_type != expected_type) {
-                free(function_name);
-                expr_free(arg);
-                exit(5);
-            }
-
+        // Bezny vyraz musi vygenerovat kod; vnorene volani uz
+        // provedlo gen_funct_call() a hodnotu ma na zasobniku.
+        if (arg != NULL) {
             process_expr_node(arg);
             expr_free(arg);
-            arg_count++;
-
-            while (tok.type == TOKEN_COMMA) {
-                advance(); 
-
-        
-                ExprNode *arg = parse_expression_wrapper();
-                if (arg == NULL) exit(99);
-
-                // proccess argument expression, and push to stack
-                process_expr_node(arg);
-                
-                data_type type = arg->type;
-                expr_free(arg);
-
-                
-                if (arg_count >= function->data.func.param_count) {
-                    exit(5);
-                }
-
-                
-                data_type expected = function->data.func.params[arg_count];
-
-                if (expected != type_any && type != expected) {
-                    exit(5);
-                }
-
-                arg_count++;
-            }
         }
-            expect(TOKEN_RPAREN);
 
-            if (arg_count != function->data.func.param_count) {
+        if (expected_type == type_double && arg_type == type_int) {
+            gen_inst0("INT2FLOATS");
+        }
+
+        arg_count++;
+        skip_call_layout();
+        if (tok.type != TOKEN_COMMA) {
+            break;
+        }
+
+        advance();
+        skip_call_layout();
+
+        // Scanner potlacuje EOL uvnitr zavorek; fyzicke zalomeni
+        // radku pred ')' je dostupne v tok.newline_before.
+        if (tok.type == TOKEN_RPAREN) {
+            if (!tok.newline_before) {
                 free(function_name);
-                exit(5);
+                syntax_error();
             }
-
-            data_type return_type = function->data.func.ret_type;
-
-            gen_funct_call(function_name);
-
-            free(function_name);
-            return return_type;
-        }                                 
-    
-    else {
-    syntax_error();
+            break;
+        }
     }
+
+    expect(TOKEN_RPAREN);
+    if (arg_count != function->data.func.param_count) {
+        free(function_name);
+        exit(5);
+    }
+
+    data_type return_type = function->data.func.ret_type;
+    gen_funct_call(function_name);
+    free(function_name);
+    return return_type;
 }
+// AI ASSISTED END
+
 
 // Volani funkce zatim resime zvlast, ostatni vyrazy pres precedencni parser.
 // AI-assisted (ChatGPT): pridani vystupniho parametru pro ExprNode.
@@ -692,6 +714,7 @@ static data_type parse_call_or_exp(ExprNode **out_expr) {
 
 static void parse_stmt_tail(void){
     if (tok.type == TOKEN_SEMICOLON || tok.type == TOKEN_EOL) advance();
+    else if(tok.type == TOKEN_DEDENT || tok.type == TOKEN_EOF) return;
     else syntax_error();
 }
 
@@ -720,12 +743,15 @@ if (tok.type == TOKEN_ASSIGN) {
 
     if (expr != NULL) {
         gen_var_assign(ts, var_name, var_type, expr);
-
-    } else {
-        // TODO: prirazeni vysledku volani funkce
-        // parse_call_or_exp() uz v tomto pripade generoval CALL.
-        // Zde je potreba ulozit navratovou hodnotu do promenne.
     }
+
+    else {
+        if (var_type == type_double && expr_type == type_int) {
+            gen_inst0("INT2FLOATS");
+        }
+
+        gen_var_assign(ts, var_name, var_type, NULL);
+        }
 
     expr_free(expr);
 }
@@ -780,10 +806,9 @@ static ExprNode *parse_expression_wrapper(void) {
 }
 
 static void parse_opt_return_tail(void) {
-    if (tok.type == TOKEN_EOL || tok.type == TOKEN_SEMICOLON) {
+    if (tok.type == TOKEN_EOL || tok.type == TOKEN_SEMICOLON || tok.type == TOKEN_DEDENT || tok.type == TOKEN_EOF) {
 
-        if (current_return_type != type_unit &&
-            current_return_type != type_unknown) {
+        if (current_return_type != type_unit && current_return_type != type_unknown) {
             exit(6);
         }
 
@@ -802,6 +827,10 @@ static void parse_opt_return_tail(void) {
             expr_free(expr);
             exit(6);
         }
+        
+         if (expr == NULL && current_return_type == type_double && expr_type == type_int) {
+            gen_inst0("INT2FLOATS");
+        }
 
         gen_func_return(expr);
         expr_free(expr);
@@ -814,10 +843,16 @@ static void parse_opt_return_tail(void) {
 }
 
 static void parse_function_body(void){
-    if(tok.type == TOKEN_EOL){
+    if (tok.type == TOKEN_EOL) {
         advance();
         parse_block();
-    }
+
+        if (current_return_type != type_unit &&
+            current_return_type != type_unknown &&
+            !block_returns) {
+            exit(6);
+        }
+}
 
     else if (tok.type == TOKEN_IDENTIFIER || is_non_id_expression(tok.type)) {
     ExprNode *expr = NULL;
@@ -830,8 +865,24 @@ static void parse_function_body(void){
         exit(6);
     }
 
+
+    if (expr != NULL) {
+        gen_func_return(expr);
+
+    } else {
+        if(expr_type == type_int && current_return_type == type_double){
+            gen_inst0("INT2FLOATS");
+        }
+
+        gen_func_return(NULL);
+    }
+
     expr_free(expr);
     expect(TOKEN_EOL);
+    }
+
+    else{
+        syntax_error();
     }
 }
 
@@ -846,6 +897,8 @@ static int is_stmt_start(TokenType t){
 
 
 static void parse_stmt(void) {
+    stmt_returns = false;
+
     if(tok.type == TOKEN_KW_VAR || tok.type == TOKEN_KW_VAL){
         bool is_var =(tok.type == TOKEN_KW_VAR);
         advance();
@@ -867,13 +920,22 @@ static void parse_stmt(void) {
             free(var_name);
             exit(rc);
         }
-        if(expr != NULL){
-        gen_def_var(ts, var_name, var_type, expr);
+
+        if (expr != NULL) {
+            gen_def_var(ts, var_name, var_type, expr);
+        } 
+        else {
+            gen_def_var(ts, var_name, var_type, NULL);
+
+            if (var_type == type_double && expr_type == type_int) {
+                gen_inst0("INT2FLOATS");
+            }
+
+            gen_var_assign(ts, var_name, var_type, NULL);
 
         }
-        else{
 
-        }
+
         expr_free(expr);
 
         free(var_name);  
@@ -903,6 +965,7 @@ static void parse_stmt(void) {
     else if(tok.type == TOKEN_KW_RETURN){
         advance();
         parse_opt_return_tail();
+        stmt_returns = true;
     }
 
     else if(tok.type == TOKEN_KW_IF){
@@ -922,11 +985,20 @@ static void parse_stmt(void) {
         expr_free(expr);
 
         parse_block();
+        bool then_returns = block_returns;
+
         expect(TOKEN_KW_ELSE);
         expect(TOKEN_EOL);
         gen_if_else();
+
         parse_block();
+        bool else_returns = block_returns;
+
         gen_if_end();
+
+        // IF zarucene vraci pouze tehdy,
+        // kdyz vraci obe vetve.
+        stmt_returns = then_returns && else_returns;
     }
 
     else if (tok.type == TOKEN_IDENTIFIER) {
@@ -940,25 +1012,52 @@ static void parse_stmt(void) {
         char *var_name = strdup(tok.attribute.s_val);
         if (var_name == NULL) exit(99);
 
-        advance();
-        parse_stmt_tail_id(var_name);
+            advance();
+            parse_stmt_tail_id(var_name);
 
-        free(var_name);
+            free(var_name);
+        }
     }
-}
 
-    else if(is_non_id_expression(tok.type) == 1){
-        parse_non_id_expression();
+    
+    // AI ASSISTED START
+    // AI PROMPT:
+    // oprav zpracovani samostatnych vyrazovych prikazu
+    // v parse_stmt(). Misto jednoho tokenu zpracuj cely
+    // vyraz pomoci existujiciho precedencniho parseru.
+    // Vysledek vyrazu se nepouziva.
+
+    else if (is_non_id_expression(tok.type)) {
+        ExprNode *expr = parse_expression_wrapper();
+
+        if (expr == NULL) {
+            exit(99);
+        }
+
+        process_expr_node(expr);
+
+        // Vysledek samostatneho vyrazu se zahodi.
+        gen_inst1("POPS", "GF@%tmp_res");
+
+        expr_free(expr);
         parse_stmt_tail();
     }
+
+    // AI ASSISTED END
 
     else syntax_error();
 
 }
 
-static void parse_stmts(void) {
-    if(is_stmt_start(tok.type) == 1){
+static bool parse_stmts(void) {
+    bool safe_return = false;
+    
+    while (is_stmt_start(tok.type)){
         parse_stmt();
-        parse_stmts();
+
+        if(stmt_returns){
+            safe_return = true;
+        }
     }
+    return safe_return;
 }

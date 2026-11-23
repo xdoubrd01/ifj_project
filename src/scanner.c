@@ -1,7 +1,8 @@
 /**
  *@author Denis Doubrava xdoubrd01
  * Použitý model: GPT-6.1 Sol
- * Tvorba komentářů byla za pomoci umělé inteligence: překlad, formátování a lepší formulace vět.
+ * Tvorba komentářů byla za pomoci umělé inteligence: překlad, formátování a
+ * lepší formulace vět.
  */
 
 /**
@@ -10,6 +11,10 @@
  */
 
 #include "scanner.h"
+#include "array_utils.h"
+#include "dynamic_buffer.h"
+#include "str_utils.h"
+#include "token_utils.h"
 
 #include <errno.h>
 #include <math.h>
@@ -24,11 +29,7 @@
  * The buffer always contains a terminating zero after its contents.
  * Its allocated storage can be reused for subsequent tokens.
  */
-typedef struct {
-    char  *text;
-    size_t length;
-    size_t capacity;
-} DynamicString;
+typedef DynamicBuffer DynamicString;
 
 /* The stream belongs to the caller; the scanner never closes it. */
 static FILE         *source = NULL;
@@ -77,77 +78,11 @@ static int read_char(void) {
 }
 
 /**
- * @brief Initializes an empty dynamic string without allocating storage.
- */
-static void ds_init(DynamicString *s) {
-    s->text     = NULL;
-    s->length   = 0;
-    s->capacity = 0;
-}
-
-/**
- * @brief Empties a dynamic string while retaining its allocated capacity.
- */
-static void ds_clear(DynamicString *s) {
-    s->length = 0;
-
-    if (s->text != NULL) {
-        s->text[0] = '\0';
-    }
-}
-
-/**
  * @brief Appends one character and preserves the terminating zero.
  *
  * @return 0 on success or 99 on allocation failure or size overflow.
  */
-static int ds_append(DynamicString *s, char c) {
-    /* Reserve the character and its terminating zero without size overflow. */
-    if (s->length > SIZE_MAX - 2) {
-        return 99;
-    }
-
-    size_t required = s->length + 2;
-
-    if (required > s->capacity) {
-        size_t capacity = s->capacity == 0 ? 32 : s->capacity;
-
-        while (capacity < required) {
-            if (capacity > SIZE_MAX / 2) {
-                capacity = required;
-                break;
-            }
-
-            capacity *= 2;
-        }
-
-        /* Keep the old allocation valid if realloc() fails. */
-        char *text = realloc(s->text, capacity);
-
-        if (text == NULL) {
-            return 99;
-        }
-
-        s->text     = text;
-        s->capacity = capacity;
-    }
-
-    s->text[s->length++] = c;
-    s->text[s->length]   = '\0';
-
-    return 0;
-}
-
-/**
- * @brief Releases a dynamic string and clears its fields.
- */
-static void ds_free(DynamicString *s) {
-    free(s->text);
-
-    s->text     = NULL;
-    s->length   = 0;
-    s->capacity = 0;
-}
+static int ds_append(DynamicString *s, char c) { return dynamic_buffer_append_char(s, c) ? 0 : 99; }
 
 /**
  * @brief Copies the lexeme into a caller-owned token attribute.
@@ -158,17 +93,9 @@ static void ds_free(DynamicString *s) {
  * @note The returned attribute survives reuse of the shared scanner buffer.
  */
 static int set_string_attribute(Token *token) {
-    const char *src = buffer.text != NULL ? buffer.text : "";
-
-    token->attribute.s_val = malloc(buffer.length + 1);
-
-    if (token->attribute.s_val == NULL) {
-        return 99;
-    }
-
-    memcpy(token->attribute.s_val, src, buffer.length + 1);
-
-    return 0;
+    const char *src        = buffer.data != NULL ? buffer.data : "";
+    token->attribute.s_val = string_duplicate_n(src, buffer.length);
+    return token->attribute.s_val != NULL ? 0 : 99;
 }
 
 /**
@@ -199,29 +126,20 @@ static int push_char(int c) {
  * Začátek AI části
  * Použitý model: GPT-6.1 Sol
  * Rozsah: Nová pomocná funkce pro dynamický zásobník odsazení.
- * Otestuj zpracování odsazení, zejména více vnořených bloků, návraty na předchozí úrovně,
- * prázdné řádky, komentáře a pokračování uvnitř závorek. Prověř omezení pevně velkého
- * zásobníku odsazení. Pokud omezuje zpracování platného vstupu, převeď jej na dynamicky
- * zvětšovaný zásobník. Ošetři selhání alokace, přetečení velikostí a uvolnění paměti.
+ * Otestuj zpracování odsazení, zejména více vnořených bloků, návraty na
+ * předchozí úrovně, prázdné řádky, komentáře a pokračování uvnitř závorek.
+ * Prověř omezení pevně velkého zásobníku odsazení. Pokud omezuje zpracování
+ * platného vstupu, převeď jej na dynamicky zvětšovaný zásobník. Ošetři selhání
+ * alokace, přetečení velikostí a uvolnění paměti.
  */
 static int reserve_indents(size_t required) {
     if (required <= indent_capacity) {
         return 0;
     }
 
-    if (required > SIZE_MAX / sizeof(*indent_stack)) {
+    size_t capacity;
+    if (!array_next_capacity(indent_capacity, required, sizeof(*indent_stack), 16, &capacity)) {
         return 99;
-    }
-
-    size_t capacity = indent_capacity == 0 ? 16 : indent_capacity;
-
-    while (capacity < required) {
-        if (capacity > SIZE_MAX / sizeof(*indent_stack) / 2) {
-            capacity = required;
-            break;
-        }
-
-        capacity *= 2;
     }
 
     size_t *stack = realloc(indent_stack, capacity * sizeof(*stack));
@@ -317,7 +235,7 @@ static TokenType keyword_or_identifier(const char *text) {
  */
 static int convert_int(const char *text, int *out) {
     DynamicString tmp;
-    ds_init(&tmp);
+    dynamic_buffer_init(&tmp);
 
     /* strtol() does not accept the source-language underscore separators. */
     for (size_t i = 0; text[i] != '\0'; ++i) {
@@ -325,15 +243,15 @@ static int convert_int(const char *text, int *out) {
             int rc = ds_append(&tmp, text[i]);
 
             if (rc != 0) {
-                ds_free(&tmp);
+                dynamic_buffer_free(&tmp);
                 return rc;
             }
         }
     }
 
-    *out = (int)strtol(tmp.text != NULL ? tmp.text : "0", NULL, 10);
+    *out = (int)strtol(tmp.data != NULL ? tmp.data : "0", NULL, 10);
 
-    ds_free(&tmp);
+    dynamic_buffer_free(&tmp);
 
     return 0;
 }
@@ -341,14 +259,15 @@ static int convert_int(const char *text, int *out) {
 /**
  * @brief Removes separators and suffix before converting a Double literal.
  *
- * @return 0 on success, 1 on a rejected conversion, or 99 on allocation failure.
+ * @return 0 on success, 1 on a rejected conversion, or 99 on allocation
+ * failure.
  *
  * @note Representable nonzero subnormal values are accepted.
  * @note Conversion assumes the standard C numeric locale.
  */
 static int convert_double(const char *text, double *out) {
     DynamicString tmp;
-    ds_init(&tmp);
+    dynamic_buffer_init(&tmp);
 
     for (size_t i = 0; text[i] != '\0'; ++i) {
         char c = text[i];
@@ -365,24 +284,24 @@ static int convert_double(const char *text, double *out) {
         int rc = ds_append(&tmp, c);
 
         if (rc != 0) {
-            ds_free(&tmp);
+            dynamic_buffer_free(&tmp);
             return rc;
         }
     }
 
     errno        = 0;
     char  *end   = NULL;
-    double value = strtod(tmp.text != NULL ? tmp.text : "0", &end);
+    double value = strtod(tmp.data != NULL ? tmp.data : "0", &end);
 
     /* Reject overflow and complete underflow of a nonzero literal to zero. */
     if (!isfinite(value) || end == NULL || *end != '\0' || (errno == ERANGE && value == 0.0)) {
-        ds_free(&tmp);
+        dynamic_buffer_free(&tmp);
         return 1;
     }
 
     *out = value;
 
-    ds_free(&tmp);
+    dynamic_buffer_free(&tmp);
 
     return 0;
 }
@@ -391,7 +310,8 @@ static int convert_double(const char *text, double *out) {
  * @brief Consumes a block comment after its opening delimiter was read.
  *
  * @param had_newline Receives true if the comment contained LF.
- * @return 0 on success, 1 for an unterminated comment, or 99 on counter overflow.
+ * @return 0 on success, 1 for an unterminated comment, or 99 on counter
+ * overflow.
  */
 static int consume_block_comment(bool *had_newline) {
     size_t depth = 1;
@@ -446,7 +366,8 @@ static int consume_block_comment(bool *had_newline) {
 /**
  * @brief Finishes a block comment that contained a physical newline.
  *
- * @return 0 if EOL was produced, -1 to continue scanning, or 1 on lexical error.
+ * @return 0 if EOL was produced, -1 to continue scanning, or 1 on lexical
+ * error.
  *
  * @note Only whitespace may follow the closing delimiter before LF or EOF.
  */
@@ -494,10 +415,11 @@ static int finish_multiline_comment(Token *token) {
  * Začátek AI části
  * Použitý model: GPT-6.1 Sol
  * Rozsah: Úpravy původní funkce pro práci s dynamickým zásobníkem.
- * Otestuj zpracování odsazení, zejména více vnořených bloků, návraty na předchozí úrovně,
- * prázdné řádky, komentáře a pokračování uvnitř závorek. Prověř omezení pevně velkého
- * zásobníku odsazení. Pokud omezuje zpracování platného vstupu, převeď jej na dynamicky
- * zvětšovaný zásobník. Ošetři selhání alokace, přetečení velikostí a uvolnění paměti.
+ * Otestuj zpracování odsazení, zejména více vnořených bloků, návraty na
+ * předchozí úrovně, prázdné řádky, komentáře a pokračování uvnitř závorek.
+ * Prověř omezení pevně velkého zásobníku odsazení. Pokud omezuje zpracování
+ * platného vstupu, převeď jej na dynamicky zvětšovaný zásobník. Ošetři selhání
+ * alokace, přetečení velikostí a uvolnění paměti.
  */
 static int handle_line_start(Token *token) {
     size_t spaces                    = 0;
@@ -711,7 +633,7 @@ static int handle_line_start(Token *token) {
  * A lone underscore is not an identifier in the base language.
  */
 static int read_identifier(Token *token, int first) {
-    ds_clear(&buffer);
+    dynamic_buffer_clear(&buffer);
 
     if (ds_append(&buffer, (char)first) != 0)
         return 99;
@@ -726,11 +648,11 @@ static int read_identifier(Token *token, int first) {
     if (push_char(c) != 0)
         return 99;
 
-    if (buffer.length == 1 && buffer.text[0] == '_') {
+    if (buffer.length == 1 && buffer.data[0] == '_') {
         return 1;
     }
 
-    token->type = keyword_or_identifier(buffer.text);
+    token->type = keyword_or_identifier(buffer.data);
 
     if (token->type == TOKEN_IDENTIFIER) {
         return set_string_attribute(token);
@@ -811,13 +733,13 @@ static int finish_number_delimiter(int c) {
  * Začátek AI části
  * Použitý model: GPT-6.1 Sol
  * Rozsah: Úpravy původního rozpoznávání číselných literálů.
- * Porovnej funkci read_number() s mým návrhem DKA, specifikací jazyka a poznatky z fóra.
- * Otestuj podtržítka mezi číslicemi, exponenty, přípony a úvodní nuly. Zápisy jako 01.5 musí být
- * odmítnuty, zatímco 0.5, .5 a 2e001 mají být přijaty. Nalezené chyby oprav a vysvětli změny
- * v implementaci.
+ * Porovnej funkci read_number() s mým návrhem DKA, specifikací jazyka a
+ * poznatky z fóra. Otestuj podtržítka mezi číslicemi, exponenty, přípony a
+ * úvodní nuly. Zápisy jako 01.5 musí být odmítnuty, zatímco 0.5, .5 a 2e001
+ * mají být přijaty. Nalezené chyby oprav a vysvětli změny v implementaci.
  */
 static int read_number(Token *token, int first) {
-    ds_clear(&buffer);
+    dynamic_buffer_clear(&buffer);
 
     bool has_fraction = false;
     bool has_exponent = false;
@@ -885,7 +807,6 @@ static int read_number(Token *token, int first) {
         }
     }
 
-
     if (term == 'e' || term == 'E') {
         has_exponent = true;
 
@@ -938,13 +859,13 @@ static int read_number(Token *token, int first) {
     if (has_fraction || has_exponent) {
         token->type = TOKEN_DOUBLE_LITERAL;
 
-        return convert_double(buffer.text, &token->attribute.d_val);
+        return convert_double(buffer.data, &token->attribute.d_val);
     }
 
     /* The leading-zero restriction applies to nonzero Int literals only. */
-    if (buffer.text[0] == '0') {
+    if (buffer.data[0] == '0') {
         for (size_t i = 1; i < buffer.length; ++i) {
-            if (buffer.text[i] >= '1' && buffer.text[i] <= '9') {
+            if (buffer.data[i] >= '1' && buffer.data[i] <= '9') {
                 return 1;
             }
         }
@@ -952,7 +873,7 @@ static int read_number(Token *token, int first) {
 
     token->type = TOKEN_INT_LITERAL;
 
-    return convert_int(buffer.text, &token->attribute.i_val);
+    return convert_int(buffer.data, &token->attribute.i_val);
 }
 /**
  * Konec AI části: read_number()
@@ -964,7 +885,7 @@ static int read_number(Token *token, int first) {
  * @return 0 on success, 1 on invalid contents, or 99 on allocation failure.
  */
 static int read_normal_string(Token *token) {
-    ds_clear(&buffer);
+    dynamic_buffer_clear(&buffer);
 
     while (true) {
         int c = read_char();
@@ -1024,13 +945,13 @@ static int read_normal_string(Token *token) {
  * Začátek AI části
  * Použitý model: GPT-6.1 Sol
  * Rozsah: Přepracování zpracování uzavírací řady uvozovek.
- * Zkontroluj zpracování uvozovek ve víceřádkových řetězcích podle specifikace a upřesnění
- * z fóra. Otestuj především vstupy tvořené sedmi a osmi uvozovkami za sebou, jednotlivé
- * uvozovky uvnitř řetězce a neukončené řetězce. Oprav funkci tak, aby správně rozlišovala
- * obsah řetězce a jeho ukončovací uvozovky.
+ * Zkontroluj zpracování uvozovek ve víceřádkových řetězcích podle specifikace a
+ * upřesnění z fóra. Otestuj především vstupy tvořené sedmi a osmi uvozovkami za
+ * sebou, jednotlivé uvozovky uvnitř řetězce a neukončené řetězce. Oprav funkci
+ * tak, aby správně rozlišovala obsah řetězce a jeho ukončovací uvozovky.
  */
 static int read_multiline_string(Token *token) {
-    ds_clear(&buffer);
+    dynamic_buffer_clear(&buffer);
 
     while (true) {
         int c = read_char();
@@ -1051,7 +972,7 @@ static int read_multiline_string(Token *token) {
             if (quotes >= 3) {
                 /* Remove only the final three delimiter quotes. */
                 buffer.length -= 3;
-                buffer.text[buffer.length] = '\0';
+                buffer.data[buffer.length] = '\0';
 
                 if (push_char(c) != 0) {
                     return 99;
@@ -1104,7 +1025,7 @@ static int read_string(Token *token) {
     if (push_char(third) != 0)
         return 99;
 
-    ds_clear(&buffer);
+    dynamic_buffer_clear(&buffer);
     token->type = TOKEN_STRING_LITERAL;
 
     return set_string_attribute(token);
@@ -1147,11 +1068,12 @@ static int read_at_main(Token *token) {
  * Začátek AI části
  * Použitý model: GPT-6.1 Sol
  * Rozsah: Vyčlenění původního čtení tokenů a doplnění sledování nových řádků.
- * Zkontroluj předávání tokenů ze scanneru parseru a návratové kódy při lexikální, interní
- * a vstupní chybě. Ověř, zda parser dostává dostatek informací pro kontrolu koncové čárky
- * před uzavírací závorkou na dalším řádku. Podle potřeby doplň informaci o přeskočeném
- * novém řádku a odděl samotné rozpoznávání tokenů od obsluhy veřejného rozhraní. Vysvětli
- * také vlastnictví paměti identifikátorů a řetězců.
+ * Zkontroluj předávání tokenů ze scanneru parseru a návratové kódy při
+ * lexikální, interní a vstupní chybě. Ověř, zda parser dostává dostatek
+ * informací pro kontrolu koncové čárky před uzavírací závorkou na dalším řádku.
+ * Podle potřeby doplň informaci o přeskočeném novém řádku a odděl samotné
+ * rozpoznávání tokenů od obsluhy veřejného rozhraní. Vysvětli také vlastnictví
+ * paměti identifikátorů a řetězců.
  */
 static int scan_next(Token *token) {
     if (source == NULL || token == NULL) {
@@ -1458,11 +1380,12 @@ void scanner_init(FILE *source_file) {
  * Začátek AI části
  * Použitý model: GPT-6.1 Sol
  * Rozsah: Nová obsluha rozhraní, chyb čtení a informace newline_before.
- * Zkontroluj předávání tokenů ze scanneru parseru a návratové kódy při lexikální, interní
- * a vstupní chybě. Ověř, zda parser dostává dostatek informací pro kontrolu koncové čárky
- * před uzavírací závorkou na dalším řádku. Podle potřeby doplň informaci o přeskočeném
- * novém řádku a odděl samotné rozpoznávání tokenů od obsluhy veřejného rozhraní. Vysvětli
- * také vlastnictví paměti identifikátorů a řetězců.
+ * Zkontroluj předávání tokenů ze scanneru parseru a návratové kódy při
+ * lexikální, interní a vstupní chybě. Ověř, zda parser dostává dostatek
+ * informací pro kontrolu koncové čárky před uzavírací závorkou na dalším řádku.
+ * Podle potřeby doplň informaci o přeskočeném novém řádku a odděl samotné
+ * rozpoznávání tokenů od obsluhy veřejného rozhraní. Vysvětli také vlastnictví
+ * paměti identifikátorů a řetězců.
  */
 int get_next_token(Token *token) {
     if (source == NULL || token == NULL) {
@@ -1485,8 +1408,7 @@ int get_next_token(Token *token) {
     /* A failed stream read must not be mistaken for a normal EOF. */
     if (ferror(source)) {
         if (rc == 0 && (token->type == TOKEN_IDENTIFIER || token->type == TOKEN_STRING_LITERAL)) {
-            free(token->attribute.s_val);
-            token->attribute.s_val = NULL;
+            token_destroy(token);
         }
 
         return 99;
@@ -1514,7 +1436,7 @@ int get_next_token(Token *token) {
  * Previously returned token attributes remain owned by the caller.
  */
 void scanner_free(void) {
-    ds_free(&buffer);
+    dynamic_buffer_free(&buffer);
     free(indent_stack);
 
     indent_stack        = NULL;

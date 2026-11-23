@@ -1,7 +1,8 @@
 /**
  *@authors Denis Doubrava xdoubrd01
  *         Eliáš Oharek   xohare00
- * Tvorba komentářů byla za pomoci umělé inteligence: překlad, formátování a lepší formulace vět
+ * Tvorba komentářů byla za pomoci umělé inteligence: překlad, formátování a
+ * lepší formulace vět
  */
 
 /**
@@ -11,6 +12,8 @@
  * Public API contracts and ownership rules are documented in hashtable.h.
  */
 #include "hashtable.h"
+#include "str_utils.h"
+
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -68,7 +71,8 @@ static unsigned long hash_djb2(const char *str) {
  * @param table Previously uninitialized object; NULL is accepted.
  * @param initial_capacity Initial cell count; 0 selects the default.
  * @post For a non-NULL table, items is NULL on failure.
- * @warning Does not release existing resources. Do not reinitialize a live table.
+ * @warning Does not release existing resources. Do not reinitialize a live
+ * table.
  */
 static void ht_init(hashtable *table, size_t initial_capacity) {
     if (table == NULL) {
@@ -169,8 +173,7 @@ static bool ht_resize(hashtable *table) {
      */
     for (size_t i = 0; i < table->capacity; i++) {
         if (table->items[i].state == full) {
-            ht_insert_raw(new_items, new_capacity,
-                          table->items[i].key, table->items[i].data);
+            ht_insert_raw(new_items, new_capacity, table->items[i].key, table->items[i].data);
         }
     }
 
@@ -207,8 +210,8 @@ hashtable *ht_create(size_t initial_capacity) {
 }
 
 bool ht_insert(hashtable *table, const char *key, void *data) {
-    if (table == NULL || table->items == NULL ||
-        table->capacity == 0 || key == NULL || data == NULL) {
+    if (table == NULL || table->items == NULL || table->capacity == 0 || key == NULL ||
+        data == NULL) {
         return false;
     }
 
@@ -266,15 +269,11 @@ bool ht_insert(hashtable *table, const char *key, void *data) {
         return false;
     }
 
-    /* Own a copy of the key; keep only the caller-provided value pointer. */
-    char *key_copy = malloc(strlen(key) + 1);
+    char *key_copy = string_duplicate(key);
 
     if (key_copy == NULL) {
         return false;
     }
-
-    /* Copy the terminator as well, allowing the caller to release its key. */
-    strcpy(key_copy, key);
 
     /* Publish the new entry only after its key allocation has succeeded. */
     table->items[idx].key   = key_copy;
@@ -290,9 +289,9 @@ bool ht_insert(hashtable *table, const char *key, void *data) {
     return true;
 }
 
-void *ht_search(hashtable *table, const char *key) {
-    if (table == NULL || table->items == NULL ||
-        table->capacity == 0 || key == NULL) {
+/** @brief Finds an occupied cell without changing the table. */
+static hash_item *find_item(hashtable *table, const char *key) {
+    if (table == NULL || table->items == NULL || table->capacity == 0 || key == NULL) {
         return NULL;
     }
 
@@ -308,7 +307,7 @@ void *ht_search(hashtable *table, const char *key) {
 
         /* Only occupied cells contain a key that may be compared. */
         if (item->state == full && strcmp(item->key, key) == 0) {
-            return item->data;
+            return item;
         }
 
         idx = (idx + 1) % table->capacity;
@@ -317,42 +316,30 @@ void *ht_search(hashtable *table, const char *key) {
     return NULL;
 }
 
+void *ht_search(hashtable *table, const char *key) {
+    hash_item *item = find_item(table, key);
+    return item != NULL ? item->data : NULL;
+}
+
 bool ht_delete(hashtable *table, const char *key) {
-    if (table == NULL || table->items == NULL ||
-        table->capacity == 0 || key == NULL) {
+    hash_item *item = find_item(table, key);
+    if (item == NULL) {
         return false;
     }
 
-    size_t idx = hash_djb2(key) % table->capacity;
+    /* Release the owned key, but leave value cleanup to the caller. */
+    free(item->key);
 
-    for (size_t i = 0; i < table->capacity; i++) {
-        hash_item *item = &table->items[idx];
+    item->key  = NULL;
+    item->data = NULL;
 
-        /* No matching key can occur beyond the first never-used cell. */
-        if (item->state == empty) {
-            return false;
-        }
+    /* A tombstone preserves access to later colliding entries. */
+    item->state = dead;
 
-        if (item->state == full && strcmp(item->key, key) == 0) {
-            /* Release the owned key, but leave value cleanup to the caller. */
-            free(item->key);
+    /* used stays unchanged: a deleted cell still belongs to the chain. */
+    table->size--;
 
-            item->key  = NULL;
-            item->data = NULL;
-
-            /* A tombstone preserves access to later colliding entries. */
-            item->state = dead;
-
-            /* used stays unchanged: a deleted cell still belongs to the chain. */
-            table->size--;
-
-            return true;
-        }
-
-        idx = (idx + 1) % table->capacity;
-    }
-
-    return false;
+    return true;
 }
 
 void ht_free(hashtable *table) {
@@ -383,8 +370,7 @@ void ht_free(hashtable *table) {
 }
 
 void ht_foreach(hashtable *table, ht_value_callback cb) {
-    if (table == NULL || table->items == NULL ||
-        table->capacity == 0 || cb == NULL) {
+    if (table == NULL || table->items == NULL || table->capacity == 0 || cb == NULL) {
         return;
     }
 
