@@ -681,4 +681,8 @@ void gen_def_var(SymTable *ts, char *var_name, data_type var_type, ExprNode *nod
         gen_var_assign(ts, var_name, var_type, node);
     }
 }
+
+void code_gen_cleanup(void) {
+    
+}
 // AI ASSISTED END
