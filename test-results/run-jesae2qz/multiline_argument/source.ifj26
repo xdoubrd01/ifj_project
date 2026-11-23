@@ -1,5 +1,0 @@
-import ifj26.*
-@main def run(): Unit =
-    print(
-        "OK",
-        )

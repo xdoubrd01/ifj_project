@@ -1,4 +1,0 @@
-Celkem: 1 | PASS: 0 | FAIL: 0 | PARTIAL: 1
-scopes          PASS= 0 FAIL= 0 PARTIAL= 1
-Běh části programů nebyl ověřen. PARTIAL není úspěšný end-to-end test.
-Jde o regresní sadu, nikoli důkaz úplné správnosti ani odhad bodového hodnocení.
