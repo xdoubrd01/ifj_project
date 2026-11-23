@@ -14,6 +14,7 @@
 #include "array_utils.h"
 #include "dynamic_buffer.h"
 #include "str_utils.h"
+#include "token_utils.h"
 
 #include <errno.h>
 #include <math.h>
@@ -1407,8 +1408,7 @@ int get_next_token(Token *token) {
     /* A failed stream read must not be mistaken for a normal EOF. */
     if (ferror(source)) {
         if (rc == 0 && (token->type == TOKEN_IDENTIFIER || token->type == TOKEN_STRING_LITERAL)) {
-            free(token->attribute.s_val);
-            token->attribute.s_val = NULL;
+            token_destroy(token);
         }
 
         return 99;
