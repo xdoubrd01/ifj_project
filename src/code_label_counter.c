@@ -49,3 +49,10 @@ size_t label_pop(LabelCounter *counter) {
     return id;
 }
 // AI END
+
+void label_free(LabelCounter *counter) {
+    free(counter->stack);
+    counter->stack = NULL;
+    counter->capacity = 0;
+    counter->stack_top = 0;
+}

@@ -52,4 +52,7 @@ void process_expr_node(ExprNode *node);
 void gen_var_assign(SymTable *ts, char *var_name, data_type var_type, ExprNode *node);
 void gen_def_var(SymTable *ts, char *var_name, data_type var_type, ExprNode *node);
 
+// Cleanup funkce
+void code_gen_cleanup(void);
+
 #endif // CODE_GENERATOR_H

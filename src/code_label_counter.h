@@ -2,6 +2,7 @@
 // Filename:   code_label_counter.h
 // Author:     Michal Zednicek <xzednim00>
 
+// AI - generated from c file
 #ifndef CODE_LABEL_COUNTER_H
 #define CODE_LABEL_COUNTER_H
 
@@ -30,5 +31,10 @@ size_t label_top(LabelCounter *counter);
  * Removes and returns the label ID at the top of the stack.
  */
 size_t label_pop(LabelCounter *counter);
+
+/**
+ * Frees the internal stack array and resets the counter's stack state.
+ */
+void label_free(LabelCounter *counter);
 
 #endif // CODE_LABEL_COUNTER_H

@@ -683,6 +683,9 @@ void gen_def_var(SymTable *ts, char *var_name, data_type var_type, ExprNode *nod
 }
 
 void code_gen_cleanup(void) {
-    
+    label_free(&if_counter);
+    label_free(&while_counter);
+
+    buffer_free(&code_buff);    // code_buff may be replaced with unified function
 }
 // AI ASSISTED END
