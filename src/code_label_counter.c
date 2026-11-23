@@ -1,5 +1,8 @@
-#include "code_label_counter.h"
+// Project:    IFJ26
+// Filename:   code_label_counter.c
+// Author:     Michal Zednicek <xzednim00>
 
+#include "code_label_counter.h"
 
 size_t label_push(LabelCounter *counter) {
     if (counter->stack_top == counter->capacity) {
@@ -29,3 +32,20 @@ size_t label_push(LabelCounter *counter) {
 
     return id;
 }
+
+// Prompt:
+// Generate functions to access stack of structure bellow
+// AI START
+size_t label_top(LabelCounter *counter) {
+    if (counter->stack_top == 0) {
+        exit(99);
+    }
+    return counter->stack[counter->stack_top - 1];
+}
+
+size_t label_pop(LabelCounter *counter) {
+    size_t id = label_top(counter);
+    --counter->stack_top;
+    return id;
+}
+// AI END
