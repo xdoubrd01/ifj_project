@@ -28,7 +28,7 @@ size_t label_push(LabelCounter *counter) {
     }
     
     size_t id = counter->cnt++;
-    counter->stack[counter->stack_top++] == id;
+    counter->stack[counter->stack_top++] = id;
 
     return id;
 }
