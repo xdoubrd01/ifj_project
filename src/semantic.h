@@ -16,6 +16,10 @@
  * prompt: "Add a unique id of the variable (for shadowing) and update my part."
  * prompt: "Add more accurate comments/description of functions, leave
  *          already existing comments."
+ * prompt: "My colleague needs function calls inside expressions, e.g.
+ *          val x = getValue() + 1, print(2 * getValue()) or
+ *          return getValue() + 1. Suggest how to add it to my part without
+ *          changing the precedence table."
  */
 #ifndef SEMANTIC_H
 #define SEMANTIC_H
@@ -63,5 +67,10 @@ int sem_binary_op(TokenType op, ExprNode **left, ExprNode **right,
                   ExprOp *out_op, data_type *out_type);
 // Checks operand of unary + / -
 int sem_unary_op(const ExprNode *operand);
+// prompt: "Add a semantic check of function calls inside expressions."
+// Checks a call (3 undefined, 5 arguments, 6 Boolean argument), converts
+// Int -> Double arguments in the tree, stores the return type to *out_type
+int sem_check_call(SymTable *st, const char *name, ExprNode **args, size_t argc,
+                   data_type *out_type);
 
 #endif // SEMANTIC_H

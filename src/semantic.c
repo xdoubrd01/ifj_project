@@ -18,6 +18,10 @@
  * prompt: "Add a unique id of the variable (for shadowing) and update my part."
  * prompt: "Add more accurate comments/description of functions, leave
  *          already existing comments."
+ * prompt: "My colleague needs function calls inside expressions, e.g.
+ *          val x = getValue() + 1, print(2 * getValue()) or
+ *          return getValue() + 1. Suggest how to add it to my part without
+ *          changing the precedence table."
  */
 #include "semantic.h"
 #include <stdio.h>
@@ -171,6 +175,43 @@ int sem_check_condition(const ExprNode *cond) {
     fprintf(stderr, "Semantic error(6): Condition is not a relation\n");
     return 6;
   }
+  return 0;
+}
+
+// prompt: "Add a semantic check of function calls inside expressions: undefined
+//          function (3), wrong argument count or type (5), Boolean cannot be
+//          passed (6), Int -> Double conversion of arguments in the tree."
+// Checks a function call and converts its arguments to the parameter types
+int sem_check_call(SymTable *st, const char *name, ExprNode **args, size_t argc,
+                   data_type *out_type) {
+  symbol_data *func = symtable_search_func(st, name);
+  if (func == NULL) {
+    fprintf(stderr, "Semantic error(3): Function '%s' is not defined\n", name);
+    return 3;
+  }
+  if (argc != func->data.func.param_count) {
+    fprintf(stderr, "Semantic error(5): Wrong argument count of '%s'\n", name);
+    return 5;
+  }
+  for (size_t i = 0; i < argc; i++) {
+    data_type expected = func->data.func.params[i];
+    if (args[i]->type == type_bool) {
+      // relation can be used only directly in if / while
+      fprintf(stderr, "Semantic error(6): Boolean argument of '%s'\n", name);
+      return 6;
+    }
+    if (!symtable_type_compatible(expected, args[i]->type)) {
+      fprintf(stderr, "Semantic error(5): Wrong argument type of '%s'\n", name);
+      return 5;
+    }
+    if (expected != type_any) {
+      int rc = sem_coerce_expr(&args[i], expected); // Int -> Double
+      if (rc != 0) {
+        return rc;
+      }
+    }
+  }
+  *out_type = func->data.func.ret_type;
   return 0;
 }
 
