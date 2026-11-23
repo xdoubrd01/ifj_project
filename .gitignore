@@ -1,6 +1,5 @@
 *:Zone.Identifier
 .build*
-<<<<<<< HEAD
 .idea/
 build/
 cmake-build-*/
@@ -11,11 +10,3 @@ cmake-build-*/
 /tests/results/
 __pycache__/
 *.pyc
-=======
-build/*
-ifj26
-ifj
-test-results/*
-token_dump
-*.o
->>>>>>> d60443f31e4633458985b02de01b2ba853a6177e
