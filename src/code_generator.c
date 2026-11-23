@@ -615,6 +615,13 @@ void process_expr_node(ExprNode *node) {
     }
 
     switch (node->kind) {
+    case EXPR_CALL:
+        for(size_t i = 0; i < node->u.call.argc; i++) {
+            process_expr_node(node->u.call.args[i]);
+        }
+        gen_funct_call(node->u.call.name);
+        break;
+
     case EXPR_INT_LIT:
         buffer_append_string(&code_buff, "PUSHS ");
         print_int(node->u.i_val);
