@@ -1,10 +1,16 @@
 /**
+ *@authors Denis Doubrava xdoubrd01
+ *         Eliáš Oharek   xohare00
+ * Tvorba komentářů byla za pomoci umělé inteligence: překlad, formátování a lepší formulace vět
+ */
+
+/**
  * @file symtable.h
  * @brief Symbol records and the scoped symbol table interface.
  *
  * The table owns inserted records, copied names, and copied parameter arrays.
  * Search functions return borrowed records; callers must not free them or
- * replace their owned parameter arrays.
+ * replace their owned parameter arrays or parameter names.
  *
  * Variable records expire when their scope is left.
  * Function records expire when the symbol table is destroyed.
@@ -34,7 +40,7 @@ typedef enum { sym_var, sym_func } symbol_type;
  * @brief Symbol record owned by the symbol table.
  *
  * The type member selects the active union member.
- * Function parameter arrays remain owned by the symbol table,
+ * Function parameter arrays and name copies remain owned by the symbol table,
  * including when accessed through a returned record.
  */
 typedef struct {
@@ -52,6 +58,7 @@ typedef struct {
             data_type  ret_type;
             size_t     param_count;
             data_type *params;
+            char     **param_names; /**< Owned ordered names; NULL until assigned. */
         } func;
     } data;
 } symbol_data;
@@ -183,11 +190,32 @@ bool symtable_insert_param(SymTable *table, const char *key, data_type type);
  * @return true on success; false for invalid input, a duplicate name,
  * an unrepresentable array size, or allocation failure.
  *
+ * @note Parameter names initially remain NULL; use symtable_set_func_param_names().
  * @note The caller retains ownership of the input array.
  * Function names must be unique; overloading is not supported.
  */
 bool symtable_insert_func(SymTable *table, const char *key, data_type ret_type, size_t param_count,
                           const data_type *params);
+
+/**
+ * @brief Copies parameter names into an existing function record.
+ *
+ * @param table Symbol table containing the function.
+ * @param key Function name used to find the record.
+ * @param param_count Number of names; must equal the stored parameter count.
+ * @param param_names Names in declaration order; NULL is allowed only for zero names.
+ * @return true on success; false on invalid input, a missing function,
+ * a count mismatch, size overflow, or allocation failure.
+ *
+ * @note Each name must be non-NULL and nonempty. The parser checks whether
+ * names are valid identifiers and rejects duplicate parameter declarations.
+ * @note The table copies the array and each name. The caller retains its inputs.
+ * @note Failed calls leave previous names unchanged. Successful replacement
+ * invalidates previously borrowed name pointers, but preserves parameter types.
+ * @note Builtin functions may keep param_names set to NULL.
+ */
+bool symtable_set_func_param_names(SymTable *table, const char *key, size_t param_count,
+                                   const char *const *param_names);
 
 /**
  * @brief Registers the ten builtin functions of the base IFJ26 language.

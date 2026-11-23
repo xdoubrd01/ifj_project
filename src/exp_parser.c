@@ -29,7 +29,7 @@
  *               output belongs to the code generator now) 
  */
 #include "exp_parser.h"
-#include "../src/scanner.h"
+#include "scanner.h"
 #include "semantic.h"
 #include <stdbool.h>
 #include <stdio.h>

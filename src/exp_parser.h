@@ -21,8 +21,8 @@
 #ifndef EXP_PARSER_H
 #define EXP_PARSER_H
 
-#include "../src/scanner.h"
-#include "../src/symtable.h"
+#include "scanner.h"
+#include "symtable.h"
 #include "expr_tree.h" // AI - UPDATED: result is an expression tree
 
 // AI - UPDATED: was int parse_expression(hashtable *ts, Token *next_token,

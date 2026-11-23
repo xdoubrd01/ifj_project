@@ -23,7 +23,7 @@
 #ifndef EXPR_TREE_H
 #define EXPR_TREE_H
 
-#include "../src/symtable.h"
+#include "symtable.h"
 #include <stdio.h>
 
 /*

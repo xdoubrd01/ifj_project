@@ -1,7 +1,9 @@
+#define _POSIX_C_SOURCE 200809L
+#include <stdint.h>
 #include "scanner.h"
 #include <stdio.h>
 #include <stdlib.h> // Přidáno pro použití free()
-
+#include "parser.h"
 // Pomocná funkce pro převod typu tokenu na čitelný text
 const char* token_type_to_string(TokenType type) {
     switch (type) {
@@ -49,41 +51,76 @@ const char* token_type_to_string(TokenType type) {
     }
 }
 
-int main() {
-    scanner_init(stdin);
-    Token token;
-    int result;
+/*
+ * AI-generated code (ChatGPT).
+ * Prompt: "nahrad pomocnou funkci prepare_input(), ktera pouziva
+ * tmpfile() resenim s dynamickym polem a fmemopen().
+ * vstup se nacita ze stdin, musi podporovat dva pruchody
+ * parseru spravne osetrovat chyby a uvolnneni pameti."
+ */
+static FILE *prepare_input(char **buffer_out) {
+    size_t capacity = 4096;
+    size_t length = 0;
 
-    while (true) {
-        result = get_next_token(&token);
+    *buffer_out = NULL;
 
-        if (result != 0) {
-            printf("CHYBA: Lexikální analyzátor vrátil chybový kód %d\n", result);
-            break;
-        }
-
-        printf("Typ: %s", token_type_to_string(token.type));
-
-        // Vypíšeme atribut pro identifikátory a literály a hned uvolníme
-        if (token.type == TOKEN_IDENTIFIER || token.type == TOKEN_STRING_LITERAL) {
-            printf(" | Hodnota: \"%s\"", token.attribute.s_val);
-            // Uvolníme dynamicky alokovanou paměť vrácenou skenerem
-            free(token.attribute.s_val);
-            token.attribute.s_val = NULL; // Bezpečnostní nulování ukazatele
-        } else if (token.type == TOKEN_INT_LITERAL) {
-            printf(" | Hodnota: %d", token.attribute.i_val);
-        } else if (token.type == TOKEN_DOUBLE_LITERAL) {
-            printf(" | Hodnota: %g", token.attribute.d_val);
-        }
-
-        printf("\n");
-
-        if (token.type == TOKEN_EOF) {
-            break;
-        }
+    char *buffer = malloc(capacity);
+    if (buffer == NULL) {
+        return NULL;
     }
 
-    // Korektní ukončení a smazání globálního bufferu uvnitř skeneru
-    scanner_free();
-    return result;
+    int c;
+
+    while ((c = fgetc(stdin)) != EOF) {
+        if (length == capacity) {
+            if (capacity > SIZE_MAX / 2) {
+                free(buffer);
+                return NULL;
+            }
+
+            capacity *= 2;
+
+            char *tmp = realloc(buffer, capacity);
+            if (tmp == NULL) {
+                free(buffer);
+                return NULL;
+            }
+
+            buffer = tmp;
+        }
+
+        buffer[length++] = (char)c;
+    }
+
+    if (ferror(stdin)) {
+        free(buffer);
+        return NULL;
+    }
+
+    FILE *source = fmemopen(buffer, length, "r");
+
+    if (source == NULL) {
+        free(buffer);
+        return NULL;
+    }
+
+    *buffer_out = buffer;
+    return source;
+}
+
+int main(void) {
+    char *buffer = NULL;
+    FILE *source = prepare_input(&buffer);
+
+    if (source == NULL) {
+        fprintf(stderr, "Internal error: cannot prepare input\n");
+        return 99;
+    }
+
+    parse(source);
+
+    fclose(source);
+    free(buffer);
+
+    return 0;
 }

@@ -20,8 +20,8 @@
 #ifndef SEMANTIC_H
 #define SEMANTIC_H
 
-#include "../src/scanner.h"
-#include "../src/symtable.h"
+#include "scanner.h"
+#include "symtable.h"
 #include "expr_tree.h" // AI - UPDATED: nodes are needed for implicit conversions
 #include <stdbool.h>
 
