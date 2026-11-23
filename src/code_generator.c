@@ -128,9 +128,19 @@ void gen_builtin_read_int(void) {
     gen_inst0("PUSHFRAME");
 
     gen_inst1("DEFVAR", "LF@%val");
+    gen_inst1("DEFVAR", "LF@%outside");
+
     gen_inst2("READ", "LF@%val", "int");
-    
-    gen_inst3("JUMPIFNEQ", "$$read_int_ok", "LF@%val", "nil@nil");
+    gen_inst3("JUMPIFEQ", "$$read_int_invalid", "LF@%val", "nil@nil");
+
+    gen_inst3("LT", "LF@%outside", "LF@%val", "int@-2147483648");
+    gen_inst3("JUMPIFEQ", "$$read_int_invalid", "LF@%outside", "bool@true");
+
+    gen_inst3("GT", "LF@%outside", "LF@%val", "int@2147483647");
+    gen_inst3("JUMPIFEQ", "$$read_int_invalid", "LF@%outside", "bool@true");
+
+    gen_inst1("JUMP", "$$read_int_ok");
+    gen_inst1("LABEL", "$$read_int_invalid");
     gen_inst2("MOVE", "LF@%val", "int@0");
 
     gen_inst1("LABEL", "$$read_int_ok");
