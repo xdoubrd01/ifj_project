@@ -13,7 +13,7 @@ size_t label_push(LabelCounter *counter) {
             cap = counter->capacity * 2;
         }
 
-        if (cap < (SIZE_MAX / sizeof(size_t))) {
+        if (cap > (SIZE_MAX / sizeof(size_t))) {
             exit(99);
         }
 
