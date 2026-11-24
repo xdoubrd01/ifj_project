@@ -26,6 +26,66 @@ static data_type stmt_value_type = type_unit;
 static bool block_has_value = false;
 static data_type block_value_type = type_unit;
 
+// Odvozeni jednoducheho jednoradkoveho tela uz pri registraci hlavicek.
+// Zavislosti se vyresi az po nacteni vsech deklaraci funkci.
+typedef struct PendingReturn {
+    char *name;
+    char *callee;
+    data_type literal_type;
+    struct PendingReturn *next;
+} PendingReturn;
+
+static PendingReturn *pending_returns = NULL;
+
+static void remember_return(const char *name, const char *callee, data_type literal_type) {
+    PendingReturn *p = calloc(1, sizeof(*p));
+    if (!p) exit(99);
+    p->name = strdup(name);
+    p->callee = callee ? strdup(callee) : NULL;
+    p->literal_type = literal_type;
+    if (!p->name || (callee && !p->callee)) exit(99);
+    p->next = pending_returns;
+    pending_returns = p;
+}
+
+static void resolve_returns(void) {
+    bool changed;
+    do {
+        changed = false;
+        for (PendingReturn *p = pending_returns; p; p = p->next) {
+            symbol_data *target = symtable_search_func(ts, p->name);
+            if (!target) exit(99);
+            if (target->data.func.ret_type != type_unknown) continue;
+            data_type type = p->literal_type;
+            if (p->callee) {
+                symbol_data *callee = symtable_search_func(ts, p->callee);
+                if (!callee) continue;
+                type = callee->data.func.ret_type;
+            }
+            if (type == type_unknown) continue;
+            if (!symtable_set_func_return_type(ts, p->name, type)) exit(99);
+            changed = true;
+        }
+    } while (changed);
+
+    // Nepovoluj cyklickou zavislost bez explicitniho navratoveho typu.
+    for (PendingReturn *p = pending_returns; p; p = p->next) {
+        symbol_data *target = symtable_search_func(ts, p->name);
+        if (target && target->data.func.ret_type == type_unknown && p->callee &&
+            symtable_search_func(ts, p->callee) != NULL) {
+            exit(6);
+        }
+    }
+
+    while (pending_returns) {
+        PendingReturn *p = pending_returns;
+        pending_returns = p->next;
+        free(p->name);
+        free(p->callee);
+        free(p);
+    }
+}
+
 
 typedef enum {
     FIRST_ROUND,
@@ -53,7 +113,7 @@ static void parse_function(ParserRound round);
 static void parse_opt_annotation(void);
 static void parse_opt_eol(void);
 static void parse_function_body(void);
-static void skip_function_body(void);
+static void skip_function_body(const char *name, data_type declared_type);
 
 // Parametry, typy a pomocna pole
 static void append_param(data_type **types, size_t *count, data_type type);
@@ -170,6 +230,7 @@ void parse(const char *input, size_t length) {
     scanner_init_buffer(input, length);
     advance();
     parse_program(FIRST_ROUND);
+    resolve_returns();
 
     // priprava na druhy pruchod
     if (has_lookahead) {
@@ -339,32 +400,58 @@ static data_type parse_opt_return_type(void){
 
 // V prvnim pruchodu preskocime telo. U vice radku sledujeme
 // zanoreni, aby nas nezastavil DEDENT vnitrniho bloku.
-static void skip_function_body(void){
-    if(tok.type == TOKEN_EOL){
+static void skip_function_body(const char *name, data_type declared_type) {
+    if (tok.type == TOKEN_EOL) {
         int depth = 0;
         advance();
         expect(TOKEN_INDENT);
         depth++;
-
-        while(depth > 0){
-            if(tok.type == TOKEN_EOF) syntax_error();
-            if(tok.type == TOKEN_INDENT) depth ++;
-            if(tok.type == TOKEN_DEDENT) depth --;
-             advance();
-        }
-    }
-
-    else {
-        while (tok.type != TOKEN_EOL && tok.type != TOKEN_EOF) {
+        while (depth > 0) {
+            if (tok.type == TOKEN_EOF) syntax_error();
+            if (tok.type == TOKEN_INDENT) depth++;
+            if (tok.type == TOKEN_DEDENT) depth--;
             advance();
         }
+        return;
+    }
 
-        if (tok.type == TOKEN_EOL) {
-            advance();
+    size_t count = 0;
+    data_type literal = type_unknown;
+    char *callee = NULL;
+    bool call_open = false, call_close = false;
+    while (tok.type != TOKEN_EOL && tok.type != TOKEN_EOF) {
+        if (declared_type == type_unknown) {
+            if (count == 0) {
+                switch (tok.type) {
+                case TOKEN_INT_LITERAL: literal = type_int; break;
+                case TOKEN_DOUBLE_LITERAL: literal = type_double; break;
+                case TOKEN_STRING_LITERAL: literal = type_string; break;
+                case TOKEN_IDENTIFIER:
+                    callee = strdup(tok.attribute.s_val);
+                    if (!callee) exit(99);
+                    break;
+                default: break;
+                }
+            } else if (count == 1) {
+                call_open = tok.type == TOKEN_LPAREN;
+            } else if (count == 2) {
+                call_close = tok.type == TOKEN_RPAREN;
+            }
+        }
+        count++;
+        advance();
+    }
+
+    if (declared_type == type_unknown) {
+        if (literal != type_unknown && count == 1) {
+            remember_return(name, NULL, literal);
+        } else if (callee && count == 3 && call_open && call_close) {
+            remember_return(name, callee, type_unknown);
         }
     }
+    free(callee);
+    if (tok.type == TOKEN_EOL) advance();
 }
-
 
 // V obou pruchodech nacteme hlavicku funkce, ale registrujeme ji
 // jen v prvnim. Jeji telo se kontroluje az ve druhem.
@@ -396,6 +483,7 @@ static void parse_function(ParserRound round) {
     expect(TOKEN_RPAREN);
 
     data_type ret_type = parse_opt_return_type();
+    if (is_entry && ret_type == type_unknown) ret_type = type_unit;
 
     if (round == FIRST_ROUND && is_entry) {
     if (entry_function_name != NULL) {
@@ -445,13 +533,15 @@ static void parse_function(ParserRound round) {
     expect(TOKEN_ASSIGN);
 
     if(round == FIRST_ROUND){
-        skip_function_body();
+        skip_function_body(func_name, ret_type);
     }
 
     else {
-    current_return_type = ret_type;
+    symbol_data *func_symbol = symtable_search_func(ts, func_name);
+    if (func_symbol == NULL) exit(99);
+    current_return_type = func_symbol->data.func.ret_type;
 
-    gen_func_start(ts, func_name, ret_type);
+    gen_func_start(ts, func_name, current_return_type);
 
     parse_function_body();
 
