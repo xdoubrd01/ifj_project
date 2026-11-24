@@ -740,7 +740,7 @@ static ExprNode *parse_expression_wrapper(void) {
 static void parse_opt_return_tail(void) {
     if (tok.type == TOKEN_EOL || tok.type == TOKEN_SEMICOLON || tok.type == TOKEN_DEDENT || tok.type == TOKEN_EOF) {
 
-        if (current_return_type != type_unit && current_return_type != type_unknown) {
+        if (current_return_type != type_unit) {
             exit(6);
         }
 
@@ -755,16 +755,20 @@ static void parse_opt_return_tail(void) {
         ExprNode *expr = NULL;
         data_type expr_type = parse_call_or_exp(&expr);
 
-        if (current_return_type != type_unknown && expr_type != current_return_type && !(current_return_type == type_double && expr_type == type_int)) {
+        if (current_return_type != type_unit && current_return_type != type_unknown &&
+            expr_type != current_return_type &&
+            !(current_return_type == type_double && expr_type == type_int)) {
             expr_free(expr);
             exit(6);
         }
         
-         if (expr == NULL && current_return_type == type_double && expr_type == type_int) {
-            gen_inst0("INT2FLOATS");
+        if (current_return_type == type_unit) {
+            process_expr_node(expr);
+            gen_inst1("POPS", "GF@%tmp_res");
+            gen_func_return(NULL);
+        } else {
+            gen_func_return(expr);
         }
-
-        gen_func_return(expr);
         expr_free(expr);
 
         parse_stmt_tail();
@@ -796,7 +800,7 @@ static void parse_function_body(){
     ExprNode *expr = NULL;
     data_type expr_type = parse_call_or_exp(&expr);
 
-    if (current_return_type != type_unknown &&
+    if (current_return_type != type_unit && current_return_type != type_unknown &&
         expr_type != current_return_type &&
         !(current_return_type == type_double && expr_type == type_int)) {
         expr_free(expr);
@@ -805,7 +809,13 @@ static void parse_function_body(){
 
 
     if (expr != NULL) {
-        gen_func_return(expr);
+        if (current_return_type == type_unit) {
+            process_expr_node(expr);
+            gen_inst1("POPS", "GF@%tmp_res");
+            gen_func_return(NULL);
+        } else {
+            gen_func_return(expr);
+        }
 
     } else {
         if(expr_type == type_int && current_return_type == type_double){
