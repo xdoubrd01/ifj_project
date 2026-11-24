@@ -1,14 +1,15 @@
-#include "parser.h"
 #include "code_generator.h"
 #include "exp_parser.h"
 #include "expr_tree.h"
+#include "paramlists.h"
+#include "parser.h"
 #include "scanner.h"
 #include "semantic.h"
-#include "symtable.h"
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "symtable.h"
 
 // Aktualni token a pripadny prednacteny token ze scanneru.
 static Token     tok; // current token

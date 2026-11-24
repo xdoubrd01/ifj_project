@@ -1,7 +1,6 @@
-#include "str_utils.h"
-
 #include <stdint.h>
 #include <stdlib.h>
+#include "str_utils.h"
 #include <string.h>
 
 char *string_duplicate_n(const char *text, size_t length) {

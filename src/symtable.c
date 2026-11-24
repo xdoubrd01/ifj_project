@@ -12,13 +12,12 @@
  * Public contracts and ownership rules are documented in symtable.h.
  */
 
-#include "symtable.h"
 #include "hashtable.h"
-#include "str_utils.h"
-
 #include <stdint.h>
 #include <stdlib.h>
+#include "str_utils.h"
 #include <string.h>
+#include "symtable.h"
 
 /** @brief Default capacity for each underlying hash table. */
 #define DEFAULT_SYMTABLE_CAPACITY 32U

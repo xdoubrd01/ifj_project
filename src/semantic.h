@@ -7,8 +7,8 @@
 
 #include "expr_tree.h" // AI - UPDATED: nodes are needed for implicit conversions
 #include "scanner.h"
-#include "symtable.h"
 #include <stdbool.h>
+#include "symtable.h"
 
 // prompt: "Adapt semantic.c to the current symtable.h on origin/development
 //          (SymTable, scopes), keep the logic of my functions."

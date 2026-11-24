@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+
 // Pomocna funkce pro prevod typu tokenu na citelny text
 const char *token_type_to_string(TokenType type) {
     switch (type) {

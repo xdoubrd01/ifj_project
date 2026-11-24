@@ -1,5 +1,5 @@
 /**
- *@author Denis Doubrava xdoubrd01
+ * @author Denis Doubrava xdoubrd01
  * Použitý model: GPT-6.1 Sol
  * Tvorba komentářů byla za pomoci umělé inteligence: překlad, formátování a
  * lepší formulace vět.
@@ -10,18 +10,17 @@
  * @brief Stateful lexical analyzer for the base IFJ26 language.
  */
 
-#include "scanner.h"
 #include "array_utils.h"
 #include "dynamic_buffer.h"
-#include "str_utils.h"
-#include "token_utils.h"
-
 #include <errno.h>
 #include <math.h>
+#include "scanner.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "str_utils.h"
 #include <string.h>
+#include "token_utils.h"
 
 /**
  * @brief Resizable buffer used while reading a lexeme.

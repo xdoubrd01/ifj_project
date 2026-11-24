@@ -12,10 +12,9 @@
  * Public API contracts and ownership rules are documented in hashtable.h.
  */
 #include "hashtable.h"
-#include "str_utils.h"
-
 #include <stdint.h>
 #include <stdlib.h>
+#include "str_utils.h"
 #include <string.h>
 
 /** @brief Default cell count when the requested capacity is zero. */

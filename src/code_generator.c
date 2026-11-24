@@ -2,16 +2,16 @@
 // Filename:   code_generator.c
 // Author:     Michal Zednicek <xzednim00>
 
-#include <stdio.h>
-#include <stdbool.h>
-#include <stdlib.h>
-#include "symtable.h"
-#include "expr_tree.h"
 #include "code_buffer.h"
 #include "code_generator.h"
 #include "code_label_counter.h"
-#include "valmem.h"
+#include "expr_tree.h"
+#include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include "symtable.h"
+#include "valmem.h"
 
 LabelCounter if_counter;
 LabelCounter while_counter;

@@ -5,8 +5,8 @@
 #ifndef EXPR_TREE_H
 #define EXPR_TREE_H
 
-#include "symtable.h"
 #include <stdio.h>
+#include "symtable.h"
 
 // prompt: "exp_parser.c prints IFJcode with printf, I want it to build an
 //          expression tree with types for my colleague doing the code
