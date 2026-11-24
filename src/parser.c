@@ -291,6 +291,10 @@ static void parse_parameters_tail(
     if (tok.type == TOKEN_COMMA) {
         advance();
 
+        if (tok.type == TOKEN_RPAREN && tok.newline_before) {
+            return;
+        }
+
         char *name = NULL;
         data_type type = parse_parameters_start(&name);
 
@@ -509,10 +513,11 @@ static data_type parse_type(void) {
         expect(TOKEN_TYPE_UNIT);
         return type_unit;
     }
-    else{
-        
+    else {
+        if (tok.type == TOKEN_IDENTIFIER) {
+            exit(3);
+        }
         syntax_error();
-        exit(2);
     }
 }
 
