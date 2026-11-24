@@ -21,7 +21,10 @@ static char *entry_function_name = NULL;
 static bool stmt_returns = false;
 static bool block_returns = false;
 static unsigned block_depth = 0;
-static bool implicit_return_ready = false;
+static bool stmt_has_value = false;
+static data_type stmt_value_type = type_unit;
+static bool block_has_value = false;
+static data_type block_value_type = type_unit;
 
 
 typedef enum {
@@ -486,6 +489,9 @@ static void parse_block(bool new_scope) {
         safe_return = true;
     }
 
+    // Hodnota bloku odpovida poslednimu prikazu, nikoli kteremukoli drivejsimu.
+    bool last_has_value = stmt_has_value;
+    data_type last_type = stmt_value_type;
     expect(TOKEN_DEDENT);
 
     if (new_scope) {
@@ -494,6 +500,8 @@ static void parse_block(bool new_scope) {
 
     block_depth--;
     block_returns = safe_return;
+    block_has_value = last_has_value;
+    block_value_type = last_type;
 }
 
 static data_type parse_type(void) {
@@ -678,14 +686,19 @@ static void parse_opt_return_tail(void) {
 
 static void parse_function_body(){
     if (tok.type == TOKEN_EOL) {
-        implicit_return_ready = false;
         advance();
         parse_block(false);
 
-        if (current_return_type != type_unit &&
-            current_return_type != type_unknown &&
-            !block_returns && !implicit_return_ready) {
-            exit(6);
+        if (!block_returns && current_return_type != type_unknown &&
+            current_return_type != type_unit) {
+            if (!block_has_value ||
+                (block_value_type != current_return_type &&
+                 !(current_return_type == type_double && block_value_type == type_int))) {
+                exit(6);
+            }
+            if (current_return_type == type_double && block_value_type == type_int) {
+                gen_inst0("INT2FLOATS");
+            }
         }
 }
 
@@ -739,6 +752,8 @@ static int is_stmt_start(TokenType t){
 
 static void parse_stmt(void) {
     stmt_returns = false;
+    stmt_has_value = false;
+    stmt_value_type = type_unit;
 
     if(tok.type == TOKEN_KW_VAR || tok.type == TOKEN_KW_VAL){
         bool is_var =(tok.type == TOKEN_KW_VAR);
@@ -800,6 +815,9 @@ static void parse_stmt(void) {
         expr_free(expr);
         
         parse_block(true);
+        if (!block_returns && block_has_value) {
+            gen_inst1("POPS", "GF@%tmp_res");
+        }
         gen_while_end();
 
         stmt_returns = false;
@@ -829,6 +847,18 @@ static void parse_stmt(void) {
 
         parse_block(true);
         bool then_returns = block_returns;
+        bool then_has_value = block_has_value;
+        data_type then_type = block_value_type;
+
+        // Na ceste bez explicitniho return musi byt na zasobniku jedna hodnota.
+        if (!then_returns && !then_has_value) {
+            gen_inst1("PUSHS", "nil@nil");
+        }
+        if (!then_returns && then_has_value &&
+            current_return_type == type_double && then_type == type_int) {
+            gen_inst0("INT2FLOATS");
+            then_type = type_double;
+        }
 
         expect(TOKEN_KW_ELSE);
         expect(TOKEN_EOL);
@@ -836,12 +866,49 @@ static void parse_stmt(void) {
 
         parse_block(true);
         bool else_returns = block_returns;
+        bool else_has_value = block_has_value;
+        data_type else_type = block_value_type;
+        if (!else_returns && !else_has_value) {
+            gen_inst1("PUSHS", "nil@nil");
+        }
+        if (!else_returns && else_has_value &&
+            current_return_type == type_double && else_type == type_int) {
+            gen_inst0("INT2FLOATS");
+            else_type = type_double;
+        }
 
         gen_if_end();
 
-        // IF zarucene vraci pouze tehdy,
-        // kdyz vraci obe vetve.
         stmt_returns = then_returns && else_returns;
+        if (!stmt_returns) {
+            // Obe bezne dobehnuvsi vetve musi mit shodny vysledny typ.
+            if (then_returns) {
+                stmt_value_type = else_type;
+            } else if (else_returns) {
+                stmt_value_type = then_type;
+            } else if (then_type == else_type) {
+                stmt_value_type = then_type;
+            } else {
+                stmt_value_type = type_unknown;
+            }
+
+            bool last_in_block = tok.type == TOKEN_DEDENT;
+            bool keep_value = last_in_block &&
+                (block_depth > 1 || current_return_type != type_unit);
+
+            // Pokud if neni vysledkem bloku, je vysledek nepotrebny.
+            if (!keep_value) {
+                gen_inst1("POPS", "GF@%tmp_res");
+            } else {
+                stmt_has_value = stmt_value_type != type_unknown &&
+                    stmt_value_type != type_unit;
+                // Unit je taky hodnota bloku, ale nema se povazovat
+                // za navratovy vyraz typu Int/Double/String.
+                if (!stmt_has_value) {
+                    gen_inst1("POPS", "GF@%tmp_res");
+                }
+            }
+        }
     }
 
     else if (tok.type == TOKEN_IDENTIFIER && peek_token() == TOKEN_ASSIGN) {
@@ -860,24 +927,14 @@ static void parse_stmt(void) {
         data_type expr_type = expr->type;
         parse_stmt_tail();
 
-        bool is_implicit_return = block_depth == 1 &&
-            tok.type == TOKEN_DEDENT &&
-            current_return_type != type_unit &&
-            current_return_type != type_unknown;
-
-        if (is_implicit_return &&
-            expr_type != current_return_type &&
-            !(current_return_type == type_double && expr_type == type_int)) {
-            expr_free(expr);
-            exit(6);
-        }
+        bool last_in_block = tok.type == TOKEN_DEDENT;
+        bool keep_value = last_in_block &&
+            (block_depth > 1 || current_return_type != type_unit);
 
         process_expr_node(expr);
-        if (is_implicit_return) {
-            if (current_return_type == type_double && expr_type == type_int) {
-                gen_inst0("INT2FLOATS");
-            }
-            implicit_return_ready = true;
+        if (keep_value) {
+            stmt_has_value = true;
+            stmt_value_type = expr_type;
         } else {
             gen_inst1("POPS", "GF@%tmp_res");
         }
