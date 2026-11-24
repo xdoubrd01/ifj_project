@@ -5,8 +5,8 @@
 #ifndef EXPR_TREE_H
 #define EXPR_TREE_H
 
-#include <stdio.h>
 #include "symtable.h"
+#include <stdio.h>
 
 // prompt: "exp_parser.c prints IFJcode with printf, I want it to build an
 //          expression tree with types for my colleague doing the code
@@ -30,33 +30,33 @@
 
 // kind of node
 typedef enum {
-  EXPR_INT_LIT,    // Int literal            -> u.i_val
-  EXPR_DOUBLE_LIT, // Double literal         -> u.d_val
-  EXPR_STRING_LIT, // String literal         -> u.s_val (raw value, not escaped)
-  EXPR_UNIT_LIT,   // Unit literal ()        -> no data
-  EXPR_VAR,        // variable / parameter   -> u.var (name + id)
-  EXPR_BINARY,     // binary operation       -> u.bin
-  EXPR_NEG,        // unary minus            -> u.operand
-  EXPR_INT2FLOAT,  // implicit Int -> Double -> u.operand
-  // AI - UPDATED: function call (FUNEXP)
-  EXPR_MEMBER, // receiver.member -> u.member
-  EXPR_CALL // function call          -> u.call
+    EXPR_INT_LIT,    // Int literal            -> u.i_val
+    EXPR_DOUBLE_LIT, // Double literal         -> u.d_val
+    EXPR_STRING_LIT, // String literal         -> u.s_val (raw value, not escaped)
+    EXPR_UNIT_LIT,   // Unit literal ()        -> no data
+    EXPR_VAR,        // variable / parameter   -> u.var (name + id)
+    EXPR_BINARY,     // binary operation       -> u.bin
+    EXPR_NEG,        // unary minus            -> u.operand
+    EXPR_INT2FLOAT,  // implicit Int -> Double -> u.operand
+    // AI - UPDATED: function call (FUNEXP)
+    EXPR_MEMBER, // receiver.member -> u.member
+    EXPR_CALL    // function call          -> u.call
 } ExprKind;
 
 // resolved binary operator
 typedef enum {
-  OP_ADD,    // int + int, double + double         -> ADDS
-  OP_SUB,    // -                                  -> SUBS
-  OP_MUL,    // *                                  -> MULS
-  OP_DIV,    // double / double                    -> DIVS
-  OP_IDIV,   // int / int                          -> IDIVS
-  OP_CONCAT, // string + string                    -> CONCAT
-  OP_EQ,     // ==                                 -> EQS
-  OP_NEQ,    // !=                                 -> EQS + NOTS
-  OP_LT,     // <                                  -> LTS
-  OP_LEQ,    // <=                                 -> GTS + NOTS
-  OP_GT,     // >                                  -> GTS
-  OP_GEQ     // >=                                 -> LTS + NOTS
+    OP_ADD,    // int + int, double + double         -> ADDS
+    OP_SUB,    // -                                  -> SUBS
+    OP_MUL,    // *                                  -> MULS
+    OP_DIV,    // double / double                    -> DIVS
+    OP_IDIV,   // int / int                          -> IDIVS
+    OP_CONCAT, // string + string                    -> CONCAT
+    OP_EQ,     // ==                                 -> EQS
+    OP_NEQ,    // !=                                 -> EQS + NOTS
+    OP_LT,     // <                                  -> LTS
+    OP_LEQ,    // <=                                 -> GTS + NOTS
+    OP_GT,     // >                                  -> GTS
+    OP_GEQ     // >=                                 -> LTS + NOTS
 } ExprOp;
 
 // prompt: "Variable in the tree has only a name, so the generator cannot tell
@@ -68,30 +68,34 @@ typedef enum {
 //          changing the precedence table."
 // one node of the expression tree
 typedef struct ExprNode {
-  ExprKind kind;  // what the node is
-  data_type type; // result type of this node
-  union {
-    struct { struct ExprNode *receiver; char *name; unsigned operation; } member;
-    int i_val;     // EXPR_INT_LIT
-    double d_val;  // EXPR_DOUBLE_LIT
-    char *s_val;   // EXPR_STRING_LIT (owned by node)
-    struct {       // AI - UPDATED: was char *var_name, id added for shadowing
-      char *name;  // variable name (owned by node)
-      unsigned id; // unique id from symtable (data.var.id)
-    } var;         // EXPR_VAR
-    struct {
-      ExprOp op;              // operator
-      struct ExprNode *left;  // left operand (evaluated first)
-      struct ExprNode *right; // right operand
-    } bin;                    // EXPR_BINARY
-    struct ExprNode *operand; // EXPR_NEG, EXPR_INT2FLOAT
-    // AI - UPDATED: called function and its arguments (FUNEXP)
-    struct {
-      char *name;             // called function (owned by node)
-      struct ExprNode **args; // arguments, evaluated left to right (owned)
-      size_t argc;            // number of arguments
-    } call;                   // EXPR_CALL
-  } u;
+    ExprKind  kind; // what the node is
+    data_type type; // result type of this node
+    union {
+        struct {
+            struct ExprNode *receiver;
+            char            *name;
+            unsigned         operation;
+        } member;
+        int    i_val;      // EXPR_INT_LIT
+        double d_val;      // EXPR_DOUBLE_LIT
+        char  *s_val;      // EXPR_STRING_LIT (owned by node)
+        struct {           // AI - UPDATED: was char *var_name, id added for shadowing
+            char    *name; // variable name (owned by node)
+            unsigned id;   // unique id from symtable (data.var.id)
+        } var;             // EXPR_VAR
+        struct {
+            ExprOp           op;    // operator
+            struct ExprNode *left;  // left operand (evaluated first)
+            struct ExprNode *right; // right operand
+        } bin;                      // EXPR_BINARY
+        struct ExprNode *operand;   // EXPR_NEG, EXPR_INT2FLOAT
+        // AI - UPDATED: called function and its arguments (FUNEXP)
+        struct {
+            char             *name; // called function (owned by node)
+            struct ExprNode **args; // arguments, evaluated left to right (owned)
+            size_t            argc; // number of arguments
+        } call;                     // EXPR_CALL
+    } u;
 } ExprNode;
 
 // prompt: "The interface is fine, you can create separate expr_tree files.

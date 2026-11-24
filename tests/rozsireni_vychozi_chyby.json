@@ -1,0 +1,17 @@
+{
+  "13_functions.user_fn_named_like_label": {
+    "phase": "run_rc:52",
+    "reason": "program returned 52, expected 0: Label already exists!",
+    "source_sha256": "ca085bea04b05528c2a0b632036bcd0facb76fcefaacc5ebfb649bd257801374"
+  },
+  "13_functions.user_fn_named_while_label": {
+    "phase": "run_rc:52",
+    "reason": "program returned 52, expected 0: Label already exists!",
+    "source_sha256": "c4543c10a6ab30ec76a89b143aa42007108aca95a13550ea46ce0dc72de50a5a"
+  },
+  "13_functions.user_fn_named_readLine_end": {
+    "phase": "run_rc:52",
+    "reason": "program returned 52, expected 0: Label already exists!",
+    "source_sha256": "6a42b0db565974be0ff39208941e4af959e6a05ee74b061db7cdccc05000a205"
+  }
+}

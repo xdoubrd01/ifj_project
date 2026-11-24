@@ -1,5 +1,5 @@
-#include <stdlib.h>
 #include "token_utils.h"
+#include <stdlib.h>
 
 void token_destroy(Token *token) {
     if (token == NULL) {

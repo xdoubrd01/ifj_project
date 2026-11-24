@@ -1,5 +1,5 @@
-#include "array_utils.h"
 #include "dynamic_buffer.h"
+#include "array_utils.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>

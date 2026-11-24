@@ -2,8 +2,8 @@
 #define CODE_GENERATOR_H
 
 #include "expr_tree.h"
-#include <stdbool.h>
 #include "symtable.h"
+#include <stdbool.h>
 
 // Vypis jednotlivych instrukci IFJcode26
 void gen_inst0(const char *inst);

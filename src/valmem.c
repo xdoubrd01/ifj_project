@@ -1,5 +1,5 @@
-#include <string.h>
 #include "valmem.h"
+#include <string.h>
 
 int valmem_check(const char *name, data_type receiver, unsigned *operation, data_type *result) {
     if (strcmp(name, "toString") == 0) {

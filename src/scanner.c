@@ -10,17 +10,17 @@
  * @brief Stateful lexical analyzer for the base IFJ26 language.
  */
 
+#include "scanner.h"
 #include "array_utils.h"
 #include "dynamic_buffer.h"
+#include "str_utils.h"
+#include "token_utils.h"
 #include <errno.h>
 #include <math.h>
-#include "scanner.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "str_utils.h"
 #include <string.h>
-#include "token_utils.h"
 
 /**
  * @brief Resizable buffer used while reading a lexeme.
@@ -31,12 +31,12 @@
 typedef DynamicBuffer DynamicString;
 
 /* The stream belongs to the caller; the scanner never closes it. */
-static FILE         *source = NULL;
+static FILE *source = NULL;
 // AI ASSISTED START
 // AI PROMPT: Podporuj pametovy vstup bez fmemopen a zachovej FILE vstup.
-static const unsigned char *memory_source = NULL;
-static size_t memory_length = 0;
-static size_t memory_position = 0;
+static const unsigned char *memory_source   = NULL;
+static size_t               memory_length   = 0;
+static size_t               memory_position = 0;
 // AI ASSISTED END
 static DynamicString buffer;
 
@@ -80,7 +80,8 @@ static int read_char(void) {
     }
 
     if (memory_source != NULL) {
-        if (memory_position >= memory_length) return EOF;
+        if (memory_position >= memory_length)
+            return EOF;
         return memory_source[memory_position++];
     }
 
@@ -799,13 +800,17 @@ static int read_number(Token *token, int first) {
             int c = read_char();
             if (is_letter(c) || c == '_') {
                 /* VALMEM: keep the member dot and the first name character. */
-                if (push_char(c) != 0) return 99;
+                if (push_char(c) != 0)
+                    return 99;
             } else {
                 has_fraction = true;
-                if (ds_append(&buffer, '.') != 0) return 99;
-                if (!is_digit(c)) return 1;
+                if (ds_append(&buffer, '.') != 0)
+                    return 99;
+                if (!is_digit(c))
+                    return 1;
                 int rc = append_digit_sequence(c, &term);
-                if (rc != 0) return rc;
+                if (rc != 0)
+                    return rc;
             }
         }
     }
@@ -1378,8 +1383,8 @@ void scanner_init(FILE *source_file) {
 // AI PROMPT: Inicializuj scanner nad polem bajtu pro opakovane pruchody.
 void scanner_init_buffer(const char *input, size_t length) {
     scanner_free();
-    memory_source = (const unsigned char *)input;
-    memory_length = length;
+    memory_source   = (const unsigned char *)input;
+    memory_length   = length;
     memory_position = 0;
 }
 // AI ASSISTED END

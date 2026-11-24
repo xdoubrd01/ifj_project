@@ -12,12 +12,12 @@
  * Public contracts and ownership rules are documented in symtable.h.
  */
 
+#include "symtable.h"
 #include "hashtable.h"
+#include "str_utils.h"
 #include <stdint.h>
 #include <stdlib.h>
-#include "str_utils.h"
 #include <string.h>
-#include "symtable.h"
 
 /** @brief Default capacity for each underlying hash table. */
 #define DEFAULT_SYMTABLE_CAPACITY 32U
@@ -382,13 +382,13 @@ bool symtable_insert_func(SymTable *table, const char *key, data_type ret_type, 
      * Start with no parameter array.
      * A zero-parameter function therefore requires no additional allocation.
      */
-    symbol->type                  = sym_func;
+    symbol->type                       = sym_func;
     symbol->data.func.param_list_count = 1;
     symbol->data.func.param_list_sizes = NULL;
-    symbol->data.func.ret_type    = ret_type;
-    symbol->data.func.param_count = param_count;
-    symbol->data.func.params      = NULL;
-    symbol->data.func.param_names = NULL;
+    symbol->data.func.ret_type         = ret_type;
+    symbol->data.func.param_count      = param_count;
+    symbol->data.func.params           = NULL;
+    symbol->data.func.param_names      = NULL;
 
     if (param_count > 0) {
         /* Guard the byte-count multiplication before allocating the array. */

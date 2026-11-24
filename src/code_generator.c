@@ -2,26 +2,25 @@
 // Filename:   code_generator.c
 // Author:     Michal Zednicek <xzednim00>
 
-#include "code_buffer.h"
 #include "code_generator.h"
+#include "code_buffer.h"
 #include "code_label_counter.h"
 #include "expr_tree.h"
+#include "symtable.h"
+#include "valmem.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "symtable.h"
-#include "valmem.h"
 
 LabelCounter if_counter;
 LabelCounter while_counter;
 
 CodeBuffer code_buff;
 
-static size_t valmem_label;
-static char *current_func_name = NULL;
+static size_t    valmem_label;
+static char     *current_func_name     = NULL;
 static data_type current_func_ret_type = type_unknown;
-
 
 // -----    functions to generate IFJ26code instructions    -----
 
@@ -33,9 +32,7 @@ static data_type current_func_ret_type = type_unknown;
 // }
 
 // AI START
-void gen_inst0(const char *inst) {
-    buffer_append_format(&code_buff, "%s\n", inst);
-}
+void gen_inst0(const char *inst) { buffer_append_format(&code_buff, "%s\n", inst); }
 
 void gen_inst1(const char *inst, const char *arg1) {
     buffer_append_format(&code_buff, "%s %s\n", inst, arg1);
@@ -49,11 +46,11 @@ void gen_inst3(const char *inst, const char *arg1, const char *arg2, const char 
     buffer_append_format(&code_buff, "%s %s %s %s\n", inst, arg1, arg2, arg3);
 }
 
-void gen_inst4(const char *inst, const char *arg1, const char *arg2, const char *arg3, const char *arg4) {
+void gen_inst4(const char *inst, const char *arg1, const char *arg2, const char *arg3,
+               const char *arg4) {
     buffer_append_format(&code_buff, "%s %s %s %s %s\n", inst, arg1, arg2, arg3, arg4);
 }
 // AI END
-
 
 // -----    constant data formatting functions      -----
 
@@ -63,9 +60,7 @@ void gen_inst4(const char *inst, const char *arg1, const char *arg2, const char 
 // use %a format specifier for printf function
 
 // AI START
-void print_double(const double val) {
-    buffer_append_format(&code_buff, "float@%a\n", val);
-}
+void print_double(const double val) { buffer_append_format(&code_buff, "float@%a\n", val); }
 
 // prompt:
 // do the same for those formats
@@ -74,13 +69,9 @@ void print_bool(const bool val) {
     buffer_append_format(&code_buff, "bool@%s\n", val ? "true" : "false");
 }
 
-void print_nil(void) {
-    buffer_append_string(&code_buff, "nil@nil\n");
-}
+void print_nil(void) { buffer_append_string(&code_buff, "nil@nil\n"); }
 
-void print_int(const int val) {
-    buffer_append_format(&code_buff, "int@%lld\n", (long long)val);
-}
+void print_int(const int val) { buffer_append_format(&code_buff, "int@%lld\n", (long long)val); }
 // AI END
 
 void print_string(const char *str) {
@@ -98,9 +89,8 @@ void print_string(const char *str) {
     buffer_append_string(&code_buff, "\n");
 }
 
-
 // -----   built-in functions       -----
-//AI-ASSISTED START
+// AI-ASSISTED START
 void gen_builtin_print(void) {
     gen_inst1("LABEL", "$print");
     gen_inst0("CREATEFRAME");
@@ -151,7 +141,7 @@ void gen_builtin_read_int(void) {
     gen_inst0("POPFRAME");
     gen_inst0("RETURN");
 }
-//AI-ASSISTED END
+// AI-ASSISTED END
 
 // prompt: generate C function emitting IFJcode26 subroutine for built-in readDouble()
 // AI START
@@ -319,7 +309,7 @@ void gen_builtin_substr(void) {
 // AI END
 
 // Prompt:
-// napis pomocne funkcie pre definovanie tychto funkcii v cielovom jazyku: 
+// napis pomocne funkcie pre definovanie tychto funkcii v cielovom jazyku:
 // strLength, chr, readLine, toInt. pouzi instrukcnu sadu jazyka ifj26code.
 // navratovu hodnotu vracaj pomocou datoveho zasobniku
 // AI START
@@ -408,9 +398,9 @@ void code_gen_init(char *main_name) {
         exit(99);
     }
 
-    if_counter.cnt = 0;
-    if_counter.stack_top = 0;
-    while_counter.cnt = 0;
+    if_counter.cnt          = 0;
+    if_counter.stack_top    = 0;
+    while_counter.cnt       = 0;
     while_counter.stack_top = 0;
 
     gen_inst0(".IFJcode26");
@@ -440,12 +430,10 @@ void code_gen_init(char *main_name) {
 
 // -----    function generation     -----
 
-void gen_funct_call(char *func_name){
-    buffer_append_format(&code_buff, "CALL $%s\n", func_name);
-}
+void gen_funct_call(char *func_name) { buffer_append_format(&code_buff, "CALL $%s\n", func_name); }
 
 void gen_func_start(SymTable *table, char *func_name, data_type ret_type) {
-    current_func_name = func_name;
+    current_func_name     = func_name;
     current_func_ret_type = ret_type;
 
     printf("LABEL $%s\n", func_name);
@@ -488,8 +476,8 @@ void gen_func_return(ExprNode *ret_expr) {
 }
 
 // TODO: pridat osetrenie pre 'return func()'
-// mozne riesenie vraciat hodnotu na vrchu zasobniku -> vyraz z volanej funkcie pomocou return bude automaticky na vrchu ->
-// podporovane rozsirenie FUNEX
+// mozne riesenie vraciat hodnotu na vrchu zasobniku -> vyraz z volanej funkcie pomocou return bude
+// automaticky na vrchu -> podporovane rozsirenie FUNEX
 void gen_func_end(void) {
     buffer_append_format(&code_buff, "LABEL $%s$end\n", current_func_name);
 
@@ -549,14 +537,13 @@ void gen_while_end(void) {
     buffer_append_format(&code_buff, "LABEL $while_end_%d\n", current_id);
 }
 
-
-
 // -----    expr_tree process functions     -----
 
 /* For binary64, magnitudes >= 2^52 have no fractional bits. Avoid an
  * overflowing FLOAT2INT there; otherwise correct truncation toward -infinity. */
 static void gen_valmem_floor(void) {
-    if (valmem_label == SIZE_MAX) exit(99);
+    if (valmem_label == SIZE_MAX)
+        exit(99);
     char end[80];
     snprintf(end, sizeof(end), "$valmem$floor$%zu$end", valmem_label++);
     gen_inst1("POPS", "GF@%tmp_op1");
@@ -589,52 +576,53 @@ void process_expr_node(ExprNode *node) {
         // Complete logic for EXPR_BINARY
         // AI START
         switch (node->u.bin.op) {
-            case OP_ADD:
-                gen_inst0("ADDS");
-                break;
-            case OP_SUB:
-                gen_inst0("SUBS");
-                break;
-            case OP_MUL:
-                gen_inst0("MULS");
-                break;
-            case OP_DIV:
-                gen_inst0("DIVS");
-                break;
-            case OP_IDIV:
-                gen_inst0("IDIVS");
-                break;
-            case OP_EQ:
-                gen_inst0("EQS");
-                break;
-            case OP_NEQ:
-                gen_inst0("EQS");
-                gen_inst0("NOTS");
-                break;
-            case OP_LT:
-                gen_inst0("LTS");
-                break;
-            case OP_LEQ:
-                gen_inst0("GTS");
-                gen_inst0("NOTS");
-                break;
-            case OP_GT:
-                gen_inst0("GTS");
-                break;
-            case OP_GEQ:
-                gen_inst0("LTS");
-                gen_inst0("NOTS");
-                break;
-            case OP_CONCAT:
-                // IFJcode26 does not provide a CONCATS instruction.
-                // We must pop the operands into temporary variables (e.g., in GF), 
-                // perform CONCAT, and push the result back.
-                // (Make sure to define GF@%tmp_op1, GF@%tmp_op2, GF@%tmp_res during program initialization)
-                buffer_append_string(&code_buff, "POPS GF@%tmp_op2\n");
-                buffer_append_string(&code_buff, "POPS GF@%tmp_op1\n");
-                buffer_append_string(&code_buff, "CONCAT GF@%tmp_res GF@%tmp_op1 GF@%tmp_op2\n");
-                buffer_append_string(&code_buff, "PUSHS GF@%tmp_res\n");
-                break;
+        case OP_ADD:
+            gen_inst0("ADDS");
+            break;
+        case OP_SUB:
+            gen_inst0("SUBS");
+            break;
+        case OP_MUL:
+            gen_inst0("MULS");
+            break;
+        case OP_DIV:
+            gen_inst0("DIVS");
+            break;
+        case OP_IDIV:
+            gen_inst0("IDIVS");
+            break;
+        case OP_EQ:
+            gen_inst0("EQS");
+            break;
+        case OP_NEQ:
+            gen_inst0("EQS");
+            gen_inst0("NOTS");
+            break;
+        case OP_LT:
+            gen_inst0("LTS");
+            break;
+        case OP_LEQ:
+            gen_inst0("GTS");
+            gen_inst0("NOTS");
+            break;
+        case OP_GT:
+            gen_inst0("GTS");
+            break;
+        case OP_GEQ:
+            gen_inst0("LTS");
+            gen_inst0("NOTS");
+            break;
+        case OP_CONCAT:
+            // IFJcode26 does not provide a CONCATS instruction.
+            // We must pop the operands into temporary variables (e.g., in GF),
+            // perform CONCAT, and push the result back.
+            // (Make sure to define GF@%tmp_op1, GF@%tmp_op2, GF@%tmp_res during program
+            // initialization)
+            buffer_append_string(&code_buff, "POPS GF@%tmp_op2\n");
+            buffer_append_string(&code_buff, "POPS GF@%tmp_op1\n");
+            buffer_append_string(&code_buff, "CONCAT GF@%tmp_res GF@%tmp_op1 GF@%tmp_op2\n");
+            buffer_append_string(&code_buff, "PUSHS GF@%tmp_res\n");
+            break;
         }
         // AI END
     }
@@ -643,14 +631,22 @@ void process_expr_node(ExprNode *node) {
     case EXPR_MEMBER:
         process_expr_node(node->u.member.receiver);
         switch (node->u.member.operation) {
-        case VALMEM_STRING: gen_funct_call("toStr"); break;
-        case VALMEM_INT: gen_funct_call("toInt"); break;
-        case VALMEM_LENGTH: gen_funct_call("strLength"); break;
-        case VALMEM_FLOOR: gen_valmem_floor(); break;
+        case VALMEM_STRING:
+            gen_funct_call("toStr");
+            break;
+        case VALMEM_INT:
+            gen_funct_call("toInt");
+            break;
+        case VALMEM_LENGTH:
+            gen_funct_call("strLength");
+            break;
+        case VALMEM_FLOOR:
+            gen_valmem_floor();
+            break;
         }
         break;
     case EXPR_CALL:
-        for(size_t i = 0; i < node->u.call.argc; i++) {
+        for (size_t i = 0; i < node->u.call.argc; i++) {
             process_expr_node(node->u.call.args[i]);
         }
         gen_funct_call(node->u.call.name);
@@ -660,7 +656,7 @@ void process_expr_node(ExprNode *node) {
         buffer_append_string(&code_buff, "PUSHS ");
         print_int(node->u.i_val);
         break;
-    
+
     case EXPR_DOUBLE_LIT:
         buffer_append_string(&code_buff, "PUSHS ");
         print_double(node->u.d_val);
@@ -701,15 +697,14 @@ void process_expr_node(ExprNode *node) {
     }
 }
 
-
 // -----    variable related functions      -----
 
 // AI ASSISTED START
 void gen_var_assign(SymTable *ts, char *var_name, data_type var_type, ExprNode *node) {
     symbol_data *var_data = symtable_search_var(ts, var_name);
-    unsigned var_id =  var_data->data.var.id;
+    unsigned     var_id   = var_data->data.var.id;
 
-    if(node) { // opravil jsem obracenou podminku, node se zavola kdyz vyrazovy strom existuje
+    if (node) { // opravil jsem obracenou podminku, node se zavola kdyz vyrazovy strom existuje
         process_expr_node(node);
 
         // Implicitná konverzia Int -> Double na vrchole dátového zásobníka
@@ -724,7 +719,7 @@ void gen_var_assign(SymTable *ts, char *var_name, data_type var_type, ExprNode *
 
 void gen_def_var(SymTable *ts, char *var_name, data_type var_type, ExprNode *node) {
     symbol_data *var_data = symtable_search_var(ts, var_name);
-    unsigned var_id =  var_data->data.var.id;
+    unsigned     var_id   = var_data->data.var.id;
 
     printf("DEFVAR LF@v%u\n", var_id);
 

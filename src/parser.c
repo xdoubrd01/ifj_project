@@ -1,15 +1,15 @@
+#include "parser.h"
 #include "code_generator.h"
 #include "exp_parser.h"
 #include "expr_tree.h"
 #include "paramlists.h"
-#include "parser.h"
 #include "scanner.h"
 #include "semantic.h"
+#include "symtable.h"
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "symtable.h"
 
 // Aktualni token a pripadny prednacteny token ze scanneru.
 static Token     tok; // current token
@@ -34,8 +34,8 @@ typedef struct {
     char   *name;
     bool    typed;
     bool   *callee_bare; // hole odkazy se vyresi po nacteni vsech hlavicek
-    char  **callees;    // jmena volanych funkci z prvniho pruchodu
-    size_t *callee_ids; // jejich indexy, doplni resolve_callees()
+    char  **callees;     // jmena volanych funkci z prvniho pruchodu
+    size_t *callee_ids;  // jejich indexy, doplni resolve_callees()
     size_t  callee_count;
 } FuncInfo;
 
@@ -478,13 +478,13 @@ static void add_callee(FuncInfo *info, const char *name, bool bare) {
     char **grown = realloc(info->callees, (info->callee_count + 1) * sizeof(char *));
     if (grown == NULL)
         exit(99);
-    info->callees                     = grown;
-    bool *flags = realloc(info->callee_bare, (info->callee_count + 1) * sizeof(*flags));
+    info->callees = grown;
+    bool *flags   = realloc(info->callee_bare, (info->callee_count + 1) * sizeof(*flags));
     if (flags == NULL)
         exit(99);
     info->callee_bare                     = flags;
     info->callee_bare[info->callee_count] = bare;
-    info->callees[info->callee_count] = strdup(name);
+    info->callees[info->callee_count]     = strdup(name);
     if (info->callees[info->callee_count] == NULL)
         exit(99);
     info->callee_count++;
@@ -493,9 +493,9 @@ static void add_callee(FuncInfo *info, const char *name, bool bare) {
 // Sbira volani se zohlednenim lokalnich promennych a jmen clenu.
 static void skip_token(FuncInfo *info, ParamBindings *bindings) {
     if (info != NULL) {
-        int reference;
+        int       reference;
         TokenType next = tok.type == TOKEN_IDENTIFIER ? peek_token() : TOKEN_EOF;
-        int rc = paramlists_track(bindings, &tok, next, &reference);
+        int       rc   = paramlists_track(bindings, &tok, next, &reference);
         if (rc != 0)
             exit(rc);
         if (reference)
@@ -562,9 +562,9 @@ static void parse_function(ParserRound round) {
     if (symtable_enter_scope(ts) == false)
         exit(99);
 
-    data_type *param_types = NULL;
-    char     **param_names = NULL;
-    size_t     param_count = 0;
+    data_type *param_types     = NULL;
+    char     **param_names     = NULL;
+    size_t     param_count     = 0;
     ParamLists parameter_lists = {0};
     while (tok.type == TOKEN_LPAREN) {
         size_t start = param_count;

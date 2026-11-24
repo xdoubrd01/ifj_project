@@ -528,7 +528,7 @@ class Runner:
 
     def expressions(self):
         binary = self.build('expressions', EXPRESSIONS_C,
-                            ['exp_parser.c', 'expr_tree.c', 'semantic.c', 'scanner.c'] + TABLES + COMMON,
+                            ['exp_parser.c', 'valmem.c', 'paramlists.c', 'expr_tree.c', 'semantic.c', 'scanner.c'] + TABLES + COMMON,
                             sanitize=False)
         tests = [('precedence', '2 + 3 * 4', 0, b'(+ int 2 (* int 3 4))\n'),
                  ('parentheses', '(2 + 3) * 4', 0, b'(* int (+ int 2 3) 4)\n'),
@@ -541,7 +541,7 @@ class Runner:
             self.check('expressions/' + name, [str(binary)], (source + '\n').encode(), rc, output)
 
     def frontend(self, extended=False):
-        sources = ['parser.c', 'scanner.c', 'exp_parser.c', 'expr_tree.c', 'semantic.c'] + TABLES + COMMON
+        sources = ['parser.c', 'scanner.c', 'exp_parser.c', 'valmem.c', 'paramlists.c', 'expr_tree.c', 'semantic.c'] + TABLES + COMMON
         binary = self.build('frontend', frontend_driver(self.src), sources, sanitize=False)
         if extended:
             from semantic_cases import cases
@@ -579,7 +579,7 @@ class Runner:
 
     def codegen(self):
         binary = self.build('codegen', CODEGEN_C,
-                            ['code_generator.c', 'code_buffer.c', 'expr_tree.c'] + TABLES + COMMON)
+                            ['code_generator.c', 'code_label_counter.c', 'code_buffer.c', 'expr_tree.c'] + TABLES + COMMON)
         tests = [('arithmetic', b'14'), ('division', b'-2'), ('escaping', b'A #\\\nB\t'),
                  ('double', b'4.00'), ('if', b'T'), ('while', b'END'),
                  ('deep_if_300', b''), ('deep_while_300', b''), ('label_collision', b'')]
