@@ -16,8 +16,8 @@
 #define SCANNER_H
 
 #include <stdbool.h>
-#include <stdio.h>
 #include <stddef.h>
+#include <stdio.h>
 
 /**
  * @brief Tokens recognized by this scanner.

@@ -797,23 +797,16 @@ static int read_number(Token *token, int first) {
         }
 
         if (term == '.') {
-            has_fraction = true;
-
-            if (ds_append(&buffer, '.') != 0) {
-                return 99;
-            }
-
             int c = read_char();
-
-            /* A fractional part is mandatory after the decimal point. */
-            if (!is_digit(c)) {
-                return 1;
-            }
-
-            int rc = append_digit_sequence(c, &term);
-
-            if (rc != 0) {
-                return rc;
+            if (is_letter(c) || c == '_') {
+                /* VALMEM: keep the member dot and the first name character. */
+                if (push_char(c) != 0) return 99;
+            } else {
+                has_fraction = true;
+                if (ds_append(&buffer, '.') != 0) return 99;
+                if (!is_digit(c)) return 1;
+                int rc = append_digit_sequence(c, &term);
+                if (rc != 0) return rc;
             }
         }
     }

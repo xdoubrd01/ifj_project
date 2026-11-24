@@ -5,9 +5,9 @@
 #ifndef SEMANTIC_H
 #define SEMANTIC_H
 
+#include "expr_tree.h" // AI - UPDATED: nodes are needed for implicit conversions
 #include "scanner.h"
 #include "symtable.h"
-#include "expr_tree.h" // AI - UPDATED: nodes are needed for implicit conversions
 #include <stdbool.h>
 
 // prompt: "Adapt semantic.c to the current symtable.h on origin/development
@@ -29,14 +29,13 @@
 // Declares a variable in the current scope.
 // declared_type = type written after ':' or type_unknown when omitted
 // value_type    = type of the initializer (expression or call)
-int sem_declare_variable(SymTable *st, const char *var_name,
-                         data_type declared_type, data_type value_type,
-                         bool is_mutable, unsigned *out_id);
+int sem_declare_variable(SymTable *st, const char *var_name, data_type declared_type,
+                         data_type value_type, bool is_mutable, unsigned *out_id);
 // Checks assignment 'var_name = value' (variable exists, is mutable, type)
 // If the value is an expression tree, call sem_coerce_expr() afterwards
 // so Int -> Double conversion appears in the tree.
-int sem_check_assignment(SymTable *st, const char *var_name,
-                         data_type value_type, unsigned *out_id);
+int sem_check_assignment(SymTable *st, const char *var_name, data_type value_type,
+                         unsigned *out_id);
 // Converts expression to the target type (inserts EXPR_INT2FLOAT if needed)
 int sem_coerce_expr(ExprNode **expr, data_type target);
 // Condition of if / while must be of type Boolean (relational expression)
@@ -44,12 +43,12 @@ int sem_check_condition(const ExprNode *cond);
 
 // Functions for expression parser
 // Finds a visible variable and stores its type to *out_type
-int sem_get_variable_type(SymTable *st, const char *var_name,
-                          data_type *out_type, unsigned *out_id);
+int sem_get_variable_type(SymTable *st, const char *var_name, data_type *out_type,
+                          unsigned *out_id);
 // Checks a binary operation, may wrap operands in EXPR_INT2FLOAT,
 // returns resolved operator and result type
-int sem_binary_op(TokenType op, ExprNode **left, ExprNode **right,
-                  ExprOp *out_op, data_type *out_type);
+int sem_binary_op(TokenType op, ExprNode **left, ExprNode **right, ExprOp *out_op,
+                  data_type *out_type);
 // Checks operand of unary + / -
 int sem_unary_op(const ExprNode *operand);
 // prompt: "Add a semantic check of function calls inside expressions."

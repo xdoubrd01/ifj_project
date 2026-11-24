@@ -42,6 +42,10 @@ void expr_free(ExprNode *node) {
     expr_free(node->u.operand); // single operand
     break;
   // AI - UPDATED: arguments and name of the called function
+  case EXPR_MEMBER:
+    expr_free(node->u.member.receiver);
+    free(node->u.member.name);
+    break;
   case EXPR_CALL:
     for (size_t i = 0; i < node->u.call.argc; i++) {
       expr_free(node->u.call.args[i]);
@@ -127,6 +131,11 @@ void expr_dump(const ExprNode *node, FILE *out) {
     fprintf(out, ")");
     break;
   // AI - UPDATED: function call
+  case EXPR_MEMBER:
+    fprintf(out, "(member %s ", node->u.member.name);
+    expr_dump(node->u.member.receiver, out);
+    fprintf(out, ")");
+    break;
   case EXPR_CALL:
     fprintf(out, "(call %s %s", node->u.call.name, type_name(node->type));
     for (size_t i = 0; i < node->u.call.argc; i++) {

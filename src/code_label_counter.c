@@ -22,12 +22,12 @@ size_t label_push(LabelCounter *counter) {
         if (new_stack == NULL) {
             exit(99);
         }
-    
-        counter->stack = new_stack;
+
+        counter->stack    = new_stack;
         counter->capacity = cap;
     }
-    
-    size_t id = counter->cnt++;
+
+    size_t id                            = counter->cnt++;
     counter->stack[counter->stack_top++] = id;
 
     return id;

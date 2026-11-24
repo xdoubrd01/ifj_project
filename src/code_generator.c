@@ -10,12 +10,15 @@
 #include "code_buffer.h"
 #include "code_generator.h"
 #include "code_label_counter.h"
+#include "valmem.h"
+#include <stdint.h>
 
 LabelCounter if_counter;
 LabelCounter while_counter;
 
 CodeBuffer code_buff;
 
+static size_t valmem_label;
 static char *current_func_name = NULL;
 static data_type current_func_ret_type = type_unknown;
 
@@ -394,6 +397,7 @@ void gen_builtin_toInt(void) {
 // -----   IFJ26code header generation      -----
 
 void code_gen_init(char *main_name) {
+    valmem_label = 0;
     if (!buffer_init(&code_buff)) {
         fprintf(stderr, "Error allocating buffer!\n");
         exit(99);
@@ -549,6 +553,27 @@ void gen_while_end(void) {
 
 // -----    expr_tree process functions     -----
 
+/* For binary64, magnitudes >= 2^52 have no fractional bits. Avoid an
+ * overflowing FLOAT2INT there; otherwise correct truncation toward -infinity. */
+static void gen_valmem_floor(void) {
+    if (valmem_label == SIZE_MAX) exit(99);
+    char end[80];
+    snprintf(end, sizeof(end), "$valmem$floor$%zu$end", valmem_label++);
+    gen_inst1("POPS", "GF@%tmp_op1");
+    gen_inst2("MOVE", "GF@%tmp_res", "GF@%tmp_op1");
+    gen_inst3("LT", "GF@%tmp_op2", "GF@%tmp_op1", "float@0x1p+52");
+    gen_inst3("JUMPIFEQ", end, "GF@%tmp_op2", "bool@false");
+    gen_inst3("GT", "GF@%tmp_op2", "GF@%tmp_op1", "float@-0x1p+52");
+    gen_inst3("JUMPIFEQ", end, "GF@%tmp_op2", "bool@false");
+    gen_inst2("FLOAT2INT", "GF@%tmp_op2", "GF@%tmp_op1");
+    gen_inst2("INT2FLOAT", "GF@%tmp_res", "GF@%tmp_op2");
+    gen_inst3("GT", "GF@%tmp_op2", "GF@%tmp_res", "GF@%tmp_op1");
+    gen_inst3("JUMPIFEQ", end, "GF@%tmp_op2", "bool@false");
+    gen_inst3("SUB", "GF@%tmp_res", "GF@%tmp_res", "float@0x1p+0");
+    gen_inst1("LABEL", end);
+    gen_inst1("PUSHS", "GF@%tmp_res");
+}
+
 void process_expr_node(ExprNode *node) {
     if (node->kind == EXPR_BINARY) {
         ExprNode *left = node->u.bin.left;
@@ -615,6 +640,15 @@ void process_expr_node(ExprNode *node) {
     }
 
     switch (node->kind) {
+    case EXPR_MEMBER:
+        process_expr_node(node->u.member.receiver);
+        switch (node->u.member.operation) {
+        case VALMEM_STRING: gen_funct_call("toStr"); break;
+        case VALMEM_INT: gen_funct_call("toInt"); break;
+        case VALMEM_LENGTH: gen_funct_call("strLength"); break;
+        case VALMEM_FLOOR: gen_valmem_floor(); break;
+        }
+        break;
     case EXPR_CALL:
         for(size_t i = 0; i < node->u.call.argc; i++) {
             process_expr_node(node->u.call.args[i]);

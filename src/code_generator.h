@@ -1,16 +1,17 @@
 #ifndef CODE_GENERATOR_H
 #define CODE_GENERATOR_H
 
-#include <stdbool.h>
-#include "symtable.h"
 #include "expr_tree.h"
+#include "symtable.h"
+#include <stdbool.h>
 
 // Vypis jednotlivych instrukci IFJcode26
 void gen_inst0(const char *inst);
 void gen_inst1(const char *inst, const char *arg1);
 void gen_inst2(const char *inst, const char *arg1, const char *arg2);
 void gen_inst3(const char *inst, const char *arg1, const char *arg2, const char *arg3);
-void gen_inst4(const char *inst, const char *arg1, const char *arg2, const char *arg3, const char *arg4);
+void gen_inst4(const char *inst, const char *arg1, const char *arg2, const char *arg3,
+               const char *arg4);
 
 // Konstanty
 void print_double(const double val);

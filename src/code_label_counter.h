@@ -10,10 +10,10 @@
 #include <stdlib.h>
 
 typedef struct {
-    size_t cnt;        // Total number of generated labels
+    size_t  cnt;       // Total number of generated labels
     size_t *stack;     // Dynamic array storing active nested label IDs
-    size_t stack_top;  // Current number of items on the stack
-    size_t capacity;   // Allocated capacity of the stack array
+    size_t  stack_top; // Current number of items on the stack
+    size_t  capacity;  // Allocated capacity of the stack array
 } LabelCounter;
 
 /**

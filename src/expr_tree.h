@@ -39,6 +39,7 @@ typedef enum {
   EXPR_NEG,        // unary minus            -> u.operand
   EXPR_INT2FLOAT,  // implicit Int -> Double -> u.operand
   // AI - UPDATED: function call (FUNEXP)
+  EXPR_MEMBER, // receiver.member -> u.member
   EXPR_CALL // function call          -> u.call
 } ExprKind;
 
@@ -70,6 +71,7 @@ typedef struct ExprNode {
   ExprKind kind;  // what the node is
   data_type type; // result type of this node
   union {
+    struct { struct ExprNode *receiver; char *name; unsigned operation; } member;
     int i_val;     // EXPR_INT_LIT
     double d_val;  // EXPR_DOUBLE_LIT
     char *s_val;   // EXPR_STRING_LIT (owned by node)

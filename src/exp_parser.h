@@ -5,9 +5,9 @@
 #ifndef EXP_PARSER_H
 #define EXP_PARSER_H
 
+#include "expr_tree.h" // AI - UPDATED: result is an expression tree
 #include "scanner.h"
 #include "symtable.h"
-#include "expr_tree.h" // AI - UPDATED: result is an expression tree
 
 // prompt: "Look at origin/development (src/parser.c, src/scanner.h,
 //          src/symtable.h). Adapt parse_expression so it returns an

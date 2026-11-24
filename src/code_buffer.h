@@ -1,14 +1,14 @@
 #ifndef CODE_BUFFER_H
 #define CODE_BUFFER_H
 
-#include <stddef.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 // Počiatočná veľkosť buffera
 #define BUFFER_INIT_CAPACITY 512
 
 typedef struct {
-    char *data;      // Ukazovateľ na samotný vygenerovaný kód
+    char  *data;     // Ukazovateľ na samotný vygenerovaný kód
     size_t length;   // Aktuálna dĺžka kódu (bez \0)
     size_t capacity; // Celková alokovaná kapacita buffera
 } CodeBuffer;
