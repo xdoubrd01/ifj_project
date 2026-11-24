@@ -2,19 +2,19 @@
 // Filename:   exp_parser.c
 // Author:     Jakub Grásgruber <xgrasgj00>
 
-#include "array_utils.h"
 #include "exp_parser.h"
-#include <limits.h>
+#include "array_utils.h"
 #include "paramlists.h"
 #include "scanner.h"
 #include "semantic.h"
+#include "token_utils.h"
+#include "valmem.h"
+#include <limits.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "token_utils.h"
-#include "valmem.h"
 
 // index of token for precedence table
 typedef enum {

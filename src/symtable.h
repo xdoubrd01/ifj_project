@@ -56,6 +56,8 @@ typedef struct {
 
         struct {
             data_type  ret_type;
+            size_t     param_list_count;
+            size_t    *param_list_sizes; // vlastnene delky seznamu parametru
             size_t     param_count;
             data_type *params;
             char     **param_names; /**< Owned ordered names; NULL until assigned. */

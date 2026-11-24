@@ -89,6 +89,7 @@ static void free_symbol(void *data) {
 
     /* Function records own parameter types and any assigned name copies. */
     if (symbol->type == sym_func) {
+        free(symbol->data.func.param_list_sizes);
         free(symbol->data.func.params);
         free_param_names(symbol->data.func.param_names, symbol->data.func.param_count);
     }
@@ -382,6 +383,8 @@ bool symtable_insert_func(SymTable *table, const char *key, data_type ret_type, 
      * A zero-parameter function therefore requires no additional allocation.
      */
     symbol->type                  = sym_func;
+    symbol->data.func.param_list_count = 1;
+    symbol->data.func.param_list_sizes = NULL;
     symbol->data.func.ret_type    = ret_type;
     symbol->data.func.param_count = param_count;
     symbol->data.func.params      = NULL;

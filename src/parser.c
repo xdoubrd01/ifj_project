@@ -33,6 +33,7 @@ static bool      emit_code         = false;     // kod generuje az posledni pruc
 typedef struct {
     char   *name;
     bool    typed;
+    bool   *callee_bare; // hole odkazy se vyresi po nacteni vsech hlavicek
     char  **callees;    // jmena volanych funkci z prvniho pruchodu
     size_t *callee_ids; // jejich indexy, doplni resolve_callees()
     size_t  callee_count;
@@ -200,12 +201,15 @@ static void resolve_callees(void) {
         for (size_t j = 0; j < info->callee_count; j++) {
             size_t *found = bsearch(info->callees[j], order, func_info_count, sizeof(size_t),
                                     compare_name_to_id);
-            if (found != NULL) {
+            if (found != NULL &&
+                (!info->callee_bare[j] || paramlists_is_bare(ts, info->callees[j]))) {
                 info->callee_ids[kept++] = *found;
             }
             free(info->callees[j]);
         }
         free(info->callees);
+        free(info->callee_bare);
+        info->callee_bare  = NULL;
         info->callees      = NULL;
         info->callee_count = kept;
     }
@@ -470,21 +474,32 @@ static data_type parse_opt_return_type(void) {
 }
 
 // prompt: "Pri preskakovani tela si zapamatuj, ktere funkce se v nem volaji."
-static void add_callee(FuncInfo *info, const char *name) {
+static void add_callee(FuncInfo *info, const char *name, bool bare) {
     char **grown = realloc(info->callees, (info->callee_count + 1) * sizeof(char *));
     if (grown == NULL)
         exit(99);
     info->callees                     = grown;
+    bool *flags = realloc(info->callee_bare, (info->callee_count + 1) * sizeof(*flags));
+    if (flags == NULL)
+        exit(99);
+    info->callee_bare                     = flags;
+    info->callee_bare[info->callee_count] = bare;
     info->callees[info->callee_count] = strdup(name);
     if (info->callees[info->callee_count] == NULL)
         exit(99);
     info->callee_count++;
 }
 
-// Posune se o token; identifikator pred '(' zapise jako volanou funkci.
-static void skip_token(FuncInfo *info) {
-    if (info != NULL && tok.type == TOKEN_IDENTIFIER && peek_token() == TOKEN_LPAREN) {
-        add_callee(info, tok.attribute.s_val);
+// Sbira volani se zohlednenim lokalnich promennych a jmen clenu.
+static void skip_token(FuncInfo *info, ParamBindings *bindings) {
+    if (info != NULL) {
+        int reference;
+        TokenType next = tok.type == TOKEN_IDENTIFIER ? peek_token() : TOKEN_EOF;
+        int rc = paramlists_track(bindings, &tok, next, &reference);
+        if (rc != 0)
+            exit(rc);
+        if (reference)
+            add_callee(info, tok.attribute.s_val, reference == 2);
     }
     advance();
 }
@@ -493,6 +508,7 @@ static void skip_token(FuncInfo *info) {
 // zanoreni, aby nas nezastavil DEDENT vnitrniho bloku.
 // AI: update
 static void skip_function_body(FuncInfo *info) {
+    ParamBindings bindings = {.table = ts, .previous = TOKEN_EOF};
     if (tok.type == TOKEN_EOL) {
         int depth = 0;
         advance();
@@ -506,19 +522,20 @@ static void skip_function_body(FuncInfo *info) {
                 depth++;
             if (tok.type == TOKEN_DEDENT)
                 depth--;
-            skip_token(info);
+            skip_token(info, &bindings);
         }
     }
 
     else {
         while (tok.type != TOKEN_EOL && tok.type != TOKEN_EOF) {
-            skip_token(info);
+            skip_token(info, &bindings);
         }
 
         if (tok.type == TOKEN_EOL) {
             advance();
         }
     }
+    paramlists_bindings_free(&bindings);
 }
 
 // V obou pruchodech nacteme hlavicku funkce, ale registrujeme ji
@@ -548,9 +565,15 @@ static void parse_function(ParserRound round) {
     data_type *param_types = NULL;
     char     **param_names = NULL;
     size_t     param_count = 0;
-    expect(TOKEN_LPAREN);
-    parse_parameters_list(&param_types, &param_names, &param_count);
-    expect(TOKEN_RPAREN);
+    ParamLists parameter_lists = {0};
+    while (tok.type == TOKEN_LPAREN) {
+        size_t start = param_count;
+        advance();
+        parse_parameters_list(&param_types, &param_names, &param_count);
+        expect(TOKEN_RPAREN);
+        if (!paramlists_append(&parameter_lists, param_count - start))
+            exit(99);
+    }
 
     data_type ret_type = parse_opt_return_type();
 
@@ -595,6 +618,10 @@ static void parse_function(ParserRound round) {
             exit(99);
         }
 
+        int list_rc = paramlists_set_signature(ts, func_name, &parameter_lists);
+        if (list_rc != 0)
+            exit(list_rc);
+
         // zaznam pro graf volani
         FuncInfo *grown = realloc(func_infos, (func_info_count + 1) * sizeof(FuncInfo));
         if (grown == NULL)
@@ -604,6 +631,7 @@ static void parse_function(ParserRound round) {
         if (func_infos[func_info_count].name == NULL)
             exit(99);
         func_infos[func_info_count].typed        = (ret_type != type_unknown);
+        func_infos[func_info_count].callee_bare  = NULL;
         func_infos[func_info_count].callees      = NULL;
         func_infos[func_info_count].callee_ids   = NULL;
         func_infos[func_info_count].callee_count = 0;
@@ -656,6 +684,7 @@ static void parse_function(ParserRound round) {
 
     free(param_names);
     free(param_types);
+    paramlists_free(&parameter_lists);
     free(func_name);
 }
 
