@@ -1,15 +1,14 @@
 /**
- * @authors Denis Doubrava xdoubrd01
- *         Eliáš Oharek   xohare00
- * Tvorba komentářů byla za pomoci umělé inteligence: překlad, formátování a
- * lepší formulace vět
- */
-
-/**
+ * @par Projekt
+ * Implementace překladače imperativního jazyka IFJ26
  * @file symtable.c
- * @brief Scoped symbol table built on the public hash table API.
- *
- * Public contracts and ownership rules are documented in symtable.h.
+ * @author Denis Doubrava, Jakub Grásgruber, Eliáš Oharek, Michal Zedníček
+ * @brief Správa funkcí, proměnných, parametrů a rozsahů platnosti
+ * nad hashovacími tabulkami. Udržuje globální tabulku funkcí a řetězec
+ * lokálních rozsahů platnosti pro proměnné a parametry. Umožňuje
+ * vyhledávání se zastíněním jmen, eviduje vlastnosti symbolů
+ * a uvolňuje jejich data při zániku rozsahu.
+ * @note AI byla využita k lepšímu znění a obsahu komentářů.
  */
 
 #include "symtable.h"
@@ -19,14 +18,16 @@
 #include <stdlib.h>
 #include <string.h>
 
-/** @brief Default capacity for each underlying hash table. */
+/**
+ * @brief Výchozí kapacita každé podkladové hashovací tabulky.
+ */
 #define DEFAULT_SYMTABLE_CAPACITY 32U
 
 /**
- * @brief Local variable scope linked to its enclosing scope.
+ * @brief Lokální rozsah propojený se svým rodičovským rozsahem.
  *
- * Each scope owns one hash table containing its variables and parameters.
- * The parent pointer links to the enclosing scope without owning it.
+ * Každý rozsah vlastní tabulku svých proměnných a parametrů. Ukazatel parent pouze odkazuje
+ * na vnější rozsah a nepřebírá jeho vlastnictví.
  */
 typedef struct Scope {
     hashtable    *table;
@@ -34,39 +35,43 @@ typedef struct Scope {
 } Scope;
 
 /**
- * @brief Private symbol table state.
+ * @brief Skrytý stav tabulky symbolů.
  *
- * Functions are stored globally, independently of local scopes.
- * Local scopes form a stack through their parent pointers.
+ * Funkce se ukládají globálně, odděleně od lokálních proměnných. Lokální rozsahy tvoří
+ * zásobník prostřednictvím ukazatelů na rodiče.
  */
 struct SymTable {
     hashtable *functions;
     Scope     *current_scope;
     size_t     initial_capacity;
     size_t     scope_depth;
-    unsigned   next_var_id; /**< Id assigned to the next variable or parameter. */
+    unsigned   next_var_id; ///< ID určené následující proměnné nebo parametru.
 };
 
-/* Internal helpers. */
+// Interní pomocné funkce.
 
 /**
- * @brief Replaces a zero capacity request with the module default.
+ * @brief Nahradí požadavek nulové kapacity výchozí hodnotou.
+ * @param capacity Požadovaná počáteční kapacita.
+ * @return Původní nenulová kapacita, nebo výchozí kapacita modulu.
  */
 static size_t normalized_capacity(size_t capacity) {
-    /* A zero request selects the default rather than an empty allocation. */
+    // Nula vybírá výchozí kapacitu, nikoli prázdnou alokaci.
     return capacity == 0 ? DEFAULT_SYMTABLE_CAPACITY : capacity;
 }
 
 /**
- * @brief Releases an owned parameter-name array and its initialized strings.
- * @param names Array to release; NULL is accepted.
- * @param count Number of initialized entries to release.
+ * @brief Uvolní vlastněné pole jmen parametrů a jeho inicializované řetězce.
+ * @param names Uvolňované pole; NULL se ignoruje.
+ * @param count Počet již inicializovaných jmen k uvolnění.
  */
 static void free_param_names(char **names, size_t count) {
+    // Prázdné nebo dosud nevytvořené pole jmen nepotřebuje úklid.
     if (names == NULL) {
         return;
     }
 
+    // Uvolňujeme pouze jména, jejichž položky již byly inicializovány.
     for (size_t i = 0; i < count; ++i) {
         free(names[i]);
     }
@@ -75,140 +80,142 @@ static void free_param_names(char **names, size_t count) {
 }
 
 /**
- * @brief Releases one symbol record, its parameter types, and name copies.
+ * @brief Uvolní záznam symbolu a jeho vlastněná pole.
  *
- * @param data Symbol record; NULL is accepted.
+ * U funkce uvolní typy parametrů, velikosti seznamů a kopie jmen. Nakonec uvolní samotný
+ * záznam; klíč zůstává ve správě hashovací tabulky.
+ * @param data Ukazatel na záznam symbolu; NULL se ignoruje.
  */
 static void free_symbol(void *data) {
-    /* Recover the concrete record type from the generic callback argument. */
+    // Obecný argument obslužné funkce převedeme na konkrétní záznam symbolu.
     symbol_data *symbol = data;
 
     if (symbol == NULL) {
         return;
     }
 
-    /* Function records own parameter types and any assigned name copies. */
+    // Záznam funkce vlastní pole typů, velikostí seznamů a případné kopie jmen parametrů.
     if (symbol->type == sym_func) {
         free(symbol->data.func.param_list_sizes);
         free(symbol->data.func.params);
         free_param_names(symbol->data.func.param_names, symbol->data.func.param_count);
     }
 
-    /*
-     * Variable records have no additional dynamically allocated payload.
-     * Function parameter storage has already been released above.
-     */
+    /* Proměnná nemá další samostatně alokovaná data.
+     * Vlastněná pole funkce již byla uvolněna výše. */
     free(symbol);
 }
 
 /**
- * @brief Releases symbol values without destroying their hash table.
- *
- * @param table Table whose values are to be released; NULL is accepted.
- *
- * @warning Use only during disposal and follow with ht_free().
+ * @brief Uvolní hodnoty symbolů bez zrušení jejich hashovací tabulky.
+ * @param table Tabulka s uvolňovanými záznamy; NULL se ignoruje.
+ * @warning Používejte pouze při rušení a bezprostředně navazujte ht_free().
  */
 static void free_symbol_table_data(hashtable *table) {
     if (table == NULL) {
         return;
     }
 
-    /*
-     * Access values through the public hash table API.
-     * The callback releases records, while keys remain owned by the hash table.
-     *
-     * Afterwards, the cells still contain pointers to released records.
-     * The caller must destroy the hash table before using those values again.
-     */
+    /* K hodnotám přistupujeme výhradně přes veřejné rozhraní hashovací tabulky.
+     * Obslužná funkce uvolní záznamy, ale klíče nadále vlastní tabulka.
+     * V buňkách pak zůstanou neplatné ukazatele; tabulku je nutné zrušit. */
     ht_foreach(table, free_symbol);
 }
 
-/* Creation and destruction. */
+// Vytvoření a zrušení tabulky symbolů.
 
+/**
+ * @brief Vytvoří tabulku symbolů s prázdnou globální tabulkou funkcí.
+ * @param initial_capacity Počáteční kapacita podkladových tabulek; 0 volí výchozí hodnotu.
+ * @return Nová tabulka symbolů, nebo NULL při selhání.
+ * @note Lokální rozsah ani vestavěné funkce se nevytvářejí automaticky.
+ */
 SymTable *symtable_create(size_t initial_capacity) {
-    /* Allocate the outer object before creating any owned hash tables. */
+    // Nejprve vytvoříme vnější objekt, teprve potom jeho vlastněné tabulky.
     SymTable *table = malloc(sizeof(*table));
     if (table == NULL) {
         return NULL;
     }
 
-    /*
-     * No local scope exists initially.
-     * Store the normalized capacity for both functions and future local scopes.
-     */
+    /* Zpočátku neexistuje žádný lokální rozsah.
+     * Normalizovanou kapacitu uložíme pro funkce i později vytvářené rozsahy. */
     table->current_scope    = NULL;
     table->scope_depth      = 0;
     table->next_var_id      = 0;
     table->initial_capacity = normalized_capacity(initial_capacity);
 
-    /* Function symbols are stored separately from local variables. */
+    // Funkce mají vlastní tabulku nezávislou na lokálních proměnných.
     table->functions = ht_create(table->initial_capacity);
 
     if (table->functions == NULL) {
-        /* Release the outer object if its hash table could not be created. */
+        // Pokud nelze vytvořit tabulku funkcí, uvolníme vnější objekt.
         free(table);
         return NULL;
     }
 
-    /*
-     * The object is ready for use.
-     * Opening a local scope and registering builtins are explicit operations.
-     */
+    /* Objekt je připraven k použití.
+     * Otevření rozsahu a registraci vestavěných funkcí musí zajistit volající. */
     return table;
 }
 
+/**
+ * @brief Uvolní všechny rozsahy, funkce a vlastněné záznamy.
+ * @param table Rušená tabulka symbolů; NULL se ignoruje.
+ * @warning Všechny dříve vypůjčené ukazatele na její symboly a jejich pole se stanou neplatnými.
+ */
 void symtable_destroy(SymTable *table) {
     if (table == NULL) {
         return;
     }
 
-    /*
-     * Pop all local scopes before destroying the global function table.
-     * Each iteration releases one scope and restores its parent.
-     */
+    /* Než zrušíme globální funkce, postupně opustíme všechny lokální rozsahy.
+     * Každý krok uvolní jeden rozsah a obnoví jeho rodiče. */
     while (table->current_scope != NULL) {
         symtable_leave_scope(table);
     }
 
-    /*
-     * Free function records and their parameter arrays first.
-     * Then free the hash table, which owns the copied keys and cell array.
-     */
+    /* Nejprve uvolníme záznamy funkcí a jejich pole.
+     * Potom zrušíme hashovací tabulku, která vlastní klíče a pole buněk. */
     free_symbol_table_data(table->functions);
     ht_free(table->functions);
 
-    /* No owned scopes or function records remain at this point. */
+    // Vlastněné rozsahy i záznamy funkcí jsou již uvolněny.
     free(table);
 }
 
-/* Scope management. */
+// Správa lokálních rozsahů platnosti.
 
+/**
+ * @brief Vytvoří prázdný rozsah vnořený do aktuálního rozsahu.
+ *
+ * Nový rozsah vlastní samostatnou hashovací tabulku proměnných a parametrů. Do řetězce
+ * rodičů je připojen až po úspěchu všech alokací.
+ * @param table Tabulka symbolů, v níž se rozsah otevře.
+ * @return True při úspěchu; false při NULL nebo nedostatku paměti.
+ * @note Při selhání zůstává aktuální rozsah i jeho hloubka zachována.
+ */
 bool symtable_enter_scope(SymTable *table) {
     if (table == NULL) {
         return false;
     }
 
-    /* Keep the new scope detached until all its allocations succeed. */
+    // Nový rozsah připojíme až po úspěchu všech potřebných alokací.
     Scope *scope = malloc(sizeof(*scope));
     if (scope == NULL) {
         return false;
     }
 
-    /* Each scope receives its own empty hash table. */
+    // Každý lokální rozsah dostane vlastní prázdnou hashovací tabulku.
     scope->table = ht_create(table->initial_capacity);
     if (scope->table == NULL) {
-        /*
-         * Only the new scope object needs cleanup.
-         * The active scope chain has not been modified.
-         */
+        /* Je nutné uvolnit jen dosud nepřipojený objekt nového rozsahu.
+         * Aktivní řetězec rozsahů zůstává beze změny. */
         free(scope);
         return false;
     }
 
-    /*
-     * Link the fully initialized scope to its enclosing scope.
-     * Make it current only after all required allocations have succeeded.
-     */
+    /* Inicializovaný rozsah propojíme s rodičem a nastavíme jako aktuální.
+     * Změna probíhá až po úspěchu všech potřebných alokací. */
     scope->parent        = table->current_scope;
     table->current_scope = scope;
     table->scope_depth++;
@@ -216,29 +223,34 @@ bool symtable_enter_scope(SymTable *table) {
     return true;
 }
 
+/**
+ * @brief Opustí aktuální lokální rozsah a obnoví jeho rodiče.
+ *
+ * Uvolní symboly daného rozsahu, jeho hashovací tabulku i samotný objekt rozsahu. Globální
+ * tabulka funkcí zůstává zachována.
+ * @param table Tabulka symbolů s opouštěným rozsahem.
+ * @return True při úspěchu; false při NULL nebo neexistujícím lokálním rozsahu.
+ * @warning Ukazatele na symboly odstraněného rozsahu přestanou být platné.
+ */
 bool symtable_leave_scope(SymTable *table) {
     if (table == NULL || table->current_scope == NULL) {
         return false;
     }
 
-    /*
-     * Save the scope being removed and restore its parent first.
-     * The parent belongs to the remaining scope chain.
-     */
+    /* Zapamatujeme si opouštěný rozsah a nejprve obnovíme rodiče.
+     * Rodič nadále patří do aktivního řetězce rozsahů. */
     Scope *scope         = table->current_scope;
     table->current_scope = scope->parent;
 
-    /*
-     * Release records before destroying the hash table.
-     * The hash table releases its copied keys, but not the symbol values.
-     */
+    /* Záznamy symbolů uvolníme před zrušením hashovací tabulky.
+     * Ta uvolňuje své klíče, nikoli hodnoty symbolů. */
     free_symbol_table_data(scope->table);
     ht_free(scope->table);
 
-    /* Release the scope object after all resources it owns are gone. */
+    // Po uvolnění vlastněných dat zrušíme i objekt rozsahu.
     free(scope);
 
-    /* Keep the depth consistent with the remaining scope chain. */
+    // Počet aktivních rozsahů udržujeme v souladu s řetězcem rodičů.
     if (table->scope_depth > 0) {
         table->scope_depth--;
     }
@@ -246,129 +258,200 @@ bool symtable_leave_scope(SymTable *table) {
     return true;
 }
 
+/**
+ * @brief Zjistí počet aktivních lokálních rozsahů.
+ * @param table Zkoumaná tabulka symbolů.
+ * @return Aktuální hloubka, nebo 0 pro NULL či tabulku bez lokálního rozsahu.
+ */
 size_t symtable_scope_depth(SymTable *table) {
-    /* NULL and a table without an active local scope both report depth zero. */
+    // Pro NULL i tabulku bez lokálního rozsahu vracíme nulovou hloubku.
     return table == NULL ? 0 : table->scope_depth;
 }
 
-/* Symbol lookup. */
+// Vyhledávání symbolů.
 
+/**
+ * @brief Najde proměnnou nebo parametr pouze v aktuálním rozsahu.
+ *
+ * Vnější rozsahy se neprocházejí, což umožňuje samostatnou kontrolu duplicitních deklarací.
+ * @param table Prohledávaná tabulka symbolů.
+ * @param key Jméno ukončené nulovým znakem.
+ * @return Vypůjčený záznam, nebo NULL při nenalezení, neplatném vstupu či chybějícím rozsahu.
+ */
 symbol_data *symtable_search_current_var(SymTable *table, const char *key) {
     if (table == NULL || table->current_scope == NULL || key == NULL) {
         return NULL;
     }
 
-    /*
-     * Restrict lookup to the current scope.
-     * An outer declaration does not count as a duplicate in this scope.
-     */
+    /* Pro kontrolu duplicity hledáme pouze v aktuálním rozsahu.
+     * Stejnojmenná deklarace ve vnějším rozsahu zde není duplicitou. */
     symbol_data *symbol = ht_search(table->current_scope->table, key);
     if (symbol == NULL || symbol->type != sym_var) {
         return NULL;
     }
 
-    /* Return a borrowed record without allocating or copying it. */
+    // Vracíme vypůjčený záznam bez alokace a kopírování.
     return symbol;
 }
 
+/**
+ * @brief Najde nejbližší viditelnou proměnnou nebo parametr.
+ *
+ * Prochází lokální rozsahy od aktuálního směrem k rodičům. První shoda realizuje zastínění
+ * jmen.
+ * @param table Prohledávaná tabulka symbolů.
+ * @param key Hledané jméno ukončené nulou.
+ * @return Vypůjčený záznam, nebo NULL při nenalezení či neplatném vstupu.
+ */
 symbol_data *symtable_search_var(SymTable *table, const char *key) {
     if (table == NULL || key == NULL) {
         return NULL;
     }
 
-    /* Search from the innermost scope outward to implement shadowing. */
+    // Hledáme od nejvnitřnějšího rozsahu směrem k rodičům, čímž vzniká zastínění.
     for (Scope *scope = table->current_scope; scope != NULL; scope = scope->parent) {
         symbol_data *symbol = ht_search(scope->table, key);
 
-        /* The first matching variable hides declarations in outer scopes. */
+        // První nalezená proměnná zastíní stejné jméno ve vnějších rozsazích.
         if (symbol != NULL && symbol->type == sym_var) {
             return symbol;
         }
     }
 
-    /* No active scope contains a matching variable or parameter. */
+    // Žádný aktivní lokální rozsah hledanou proměnnou nebo parametr neobsahuje.
     return NULL;
 }
 
+/**
+ * @brief Vyhledá funkci v globální tabulce funkcí.
+ * @param table Tabulka symbolů.
+ * @param key Nulou ukončené jméno funkce.
+ * @return Vypůjčený záznam funkce, nebo NULL při nenalezení či neplatných argumentech.
+ * @note Vlastnictví záznamu zůstává tabulce symbolů.
+ */
 symbol_data *symtable_search_func(SymTable *table, const char *key) {
     if (table == NULL || key == NULL) {
         return NULL;
     }
 
-    /*
-     * Functions are resolved through the global function table.
-     * Local variable scopes are not searched here.
-     */
+    /* Funkce hledáme pouze v jejich globální tabulce.
+     * Lokální rozsahy proměnných se při této operaci neprocházejí. */
     symbol_data *symbol = ht_search(table->functions, key);
     if (symbol == NULL || symbol->type != sym_func) {
         return NULL;
     }
 
-    /* The symbol table retains ownership of the returned record. */
+    // Vlastnictví vráceného záznamu zůstává tabulce symbolů.
     return symbol;
 }
 
-/* Shared insertion for local variables and function parameters. */
+// Společné vložení lokální proměnné nebo neměnitelného parametru.
+/**
+ * @brief Vloží společnou reprezentaci lokální proměnné nebo parametru.
+ *
+ * Nejprve kontroluje duplicitu pouze v aktuálním rozsahu. Po úspěšném vložení přidělí
+ * záznamu další ID a tabulka symbolů převezme jeho vlastnictví.
+ * @param table Tabulka s otevřeným lokálním rozsahem.
+ * @param key Jméno symbolu.
+ * @param type Ukládaný datový typ.
+ * @param is_mutable Povolení následného přiřazení.
+ * @param is_parameter Příznak funkčního parametru.
+ * @return True při úspěchu; false při neplatném vstupu, duplicitě nebo nedostatku paměti.
+ */
 static bool insert_local_variable(SymTable *table, const char *key, data_type type, bool is_mutable,
                                   bool is_parameter) {
     if (table == NULL || table->current_scope == NULL || key == NULL) {
         return false;
     }
 
-    /* Reject duplicates here while allowing names from outer scopes to be hidden.
-     */
+    // Duplicita je zakázána v aktuálním rozsahu; vnější jméno lze zastínit.
     if (symtable_search_current_var(table, key) != NULL) {
         return false;
     }
 
-    /*
-     * Allocate a separate record.
-     * Hash table resizing can then move entries without moving this record.
-     */
+    /* Záznam má vlastní alokaci, takže se při přesunu buněk při přehashování
+     * nemění jeho adresa. */
     symbol_data *symbol = malloc(sizeof(*symbol));
     if (symbol == NULL) {
         return false;
     }
 
-    /*
-     * Store the supplied type and mutability metadata.
-     * Contextual source-language checks are performed by the parser.
-     */
+    /* Uložíme dodaný typ a měnitelnost.
+     * Přípustnost metadat v daném místě programu kontroluje analyzátor. */
     symbol->type                  = sym_var;
     symbol->data.var.var_type     = type;
     symbol->data.var.is_mutable   = is_mutable;
     symbol->data.var.is_parameter = is_parameter;
-    symbol->data.var.id           = table->next_var_id;
+    // Generátor používá toto ID k rozlišení proměnných se stejným zdrojovým jménem.
+    symbol->data.var.id = table->next_var_id;
 
-    /* Release the new record if insertion cannot take ownership of it. */
+    // Při selhání vložení uvolníme záznam, který tabulka ještě nepřevzala.
     if (!ht_insert(table->current_scope->table, key, symbol)) {
         free(symbol);
         return false;
     }
 
-    /*
-     * Ids are never reused, so equal names from different scopes stay distinct.
-     * The symbol table owns the record; the hash table owns the copied key.
-     */
+    /* ID se při opouštění rozsahu nevrací, a proto rozlišují zastíněná jména.
+     * Záznam vlastní tabulka symbolů; kopii klíče vlastní hashovací tabulka. */
+    // Další úspěšně vložený symbol dostane následující ID bez ohledu na svůj rozsah.
     table->next_var_id++;
     return true;
 }
 
+/**
+ * @brief Zaregistruje proměnnou v aktuálním lokálním rozsahu.
+ *
+ * V aktuálním rozsahu odmítá duplicity, ale umožňuje zastínění vnějšího jména. Každý nový
+ * záznam dostane ID jedinečné v rámci této tabulky symbolů.
+ * @param table Cílová tabulka s otevřeným lokálním rozsahem.
+ * @param key Jméno proměnné; při úspěchu se zkopíruje.
+ * @param type Ukládaná informace o datovém typu.
+ * @param is_mutable Zda lze proměnné následně přiřazovat.
+ * @return True při vložení; false při neplatném vstupu, chybějícím rozsahu, duplicitě nebo selhání
+ * alokace.
+ * @note Přípustnost typu v konkrétním místě programu kontroluje parser nebo sémantický analyzátor.
+ */
 bool symtable_insert_var(SymTable *table, const char *key, data_type type, bool is_mutable) {
     return insert_local_variable(table, key, type, is_mutable, false);
 }
 
+/**
+ * @brief Zaregistruje neměnitelný parametr v aktuálním rozsahu.
+ *
+ * Parametr sdílí reprezentaci proměnné, má však is_parameter nastaveno na true a is_mutable
+ * na false. Nové ID rozlišuje stejnojmenné symboly v různých rozsazích.
+ * @param table Tabulka s aktivním lokálním rozsahem.
+ * @param key Jméno parametru; při úspěchu se zkopíruje.
+ * @param type Datový typ parametru.
+ * @return True při vložení; false při neplatném vstupu, chybějícím rozsahu, duplicitě nebo
+ * nedostatku paměti.
+ */
 bool symtable_insert_param(SymTable *table, const char *key, data_type type) {
     return insert_local_variable(table, key, type, false, true);
 }
 
+/**
+ * @brief Zaregistruje globální funkci a zkopíruje typy parametrů.
+ *
+ * Jméno funkce musí být jedinečné, přetěžování není podporováno. Záznam vytvoří s jedním
+ * seznamem parametrů; případné další členění upravuje modul PARAMLISTS.
+ * @param table Cílová tabulka symbolů.
+ * @param key Jméno funkce; při úspěchu se zkopíruje.
+ * @param ret_type Ukládaný návratový typ.
+ * @param param_count Počet prvků pole params.
+ * @param params Pole typů; při nulovém počtu smí být NULL.
+ * @return True při úspěchu; false při neplatném vstupu, duplicitě, přetečení nebo nedostatku
+ * paměti.
+ * @note Vstupní pole zůstává volajícímu; tabulka vlastní jeho kopii.
+ * @note Jména parametrů jsou zpočátku NULL; nastavuje je symtable_set_func_param_names().
+ */
 bool symtable_insert_func(SymTable *table, const char *key, data_type ret_type, size_t param_count,
                           const data_type *params) {
     if (table == NULL || key == NULL || (param_count > 0 && params == NULL)) {
         return false;
     }
 
-    /* Function names must be unique because overloading is not supported. */
+    // Jméno funkce musí být jedinečné; přetěžování funkcí není podporováno.
     if (symtable_search_func(table, key) != NULL) {
         return false;
     }
@@ -378,11 +461,10 @@ bool symtable_insert_func(SymTable *table, const char *key, data_type ret_type, 
         return false;
     }
 
-    /*
-     * Start with no parameter array.
-     * A zero-parameter function therefore requires no additional allocation.
-     */
-    symbol->type                       = sym_func;
+    /* Zpočátku není alokováno pole parametrů.
+     * Funkce s nulovým počtem parametrů tuto alokaci nepotřebuje. */
+    symbol->type = sym_func;
+    // Základní deklarace používá jeden seznam; rozšíření může členění později upravit.
     symbol->data.func.param_list_count = 1;
     symbol->data.func.param_list_sizes = NULL;
     symbol->data.func.ret_type         = ret_type;
@@ -391,7 +473,7 @@ bool symtable_insert_func(SymTable *table, const char *key, data_type ret_type, 
     symbol->data.func.param_names      = NULL;
 
     if (param_count > 0) {
-        /* Guard the byte-count multiplication before allocating the array. */
+        // Před alokací ověříme, že násobení počtu prvků jejich velikostí nepřeteče.
         if (param_count > SIZE_MAX / sizeof(*symbol->data.func.params)) {
             free(symbol);
             return false;
@@ -403,28 +485,44 @@ bool symtable_insert_func(SymTable *table, const char *key, data_type ret_type, 
             return false;
         }
 
-        /*
-         * Copy the signature instead of borrowing the input array.
-         * The caller may release or modify its original array afterwards.
-         */
+        /* Signaturu kopírujeme, neukládáme pouze odkaz na vstupní pole.
+         * Volající může původní pole po návratu upravit nebo uvolnit. */
         for (size_t i = 0; i < param_count; i++) {
             symbol->data.func.params[i] = params[i];
         }
     }
 
-    /* Neither allocation has been transferred to the table if insertion fails. */
+    // Při neúspěchu vložení nepřešla žádná nová alokace do vlastnictví tabulky.
     if (!ht_insert(table->functions, key, symbol)) {
         free(symbol->data.func.params);
         free(symbol);
         return false;
     }
 
-    /* The table owns both the record and its optional parameter-type array. */
+    // Tabulka symbolů nyní vlastní záznam i případná pole parametrů.
     return true;
 }
 
+/**
+ * @brief Nahradí jména parametrů existující funkce jejich vlastní kopií.
+ *
+ * Nejprve ověří vstupy a vytvoří úplnou kopii pole i řetězců. Teprve pak nahradí původní
+ * jména; při selhání se dosavadní údaje nemění.
+ * @param table Tabulka obsahující danou funkci.
+ * @param key Jméno existující funkce.
+ * @param param_count Počet jmen shodný s počtem parametrů funkce.
+ * @param param_names Jména v pořadí deklarace; NULL je přípustné jen při nulovém počtu.
+ * @return True při úspěchu; false při neplatném vstupu, neshodě počtu, přetečení nebo selhání
+ * alokace.
+ * @note Jména musí být nenulová a neprázdná; jejich lexikální platnost a duplicity kontroluje
+ * parser.
+ * @note Volající si ponechává vlastnictví všech vstupů; vestavěné funkce mohou mít jména NULL.
+ * @warning Úspěšná náhrada zneplatní dříve vypůjčené ukazatele na jména, nikoli pole typů
+ * parametrů.
+ */
 bool symtable_set_func_param_names(SymTable *table, const char *key, size_t param_count,
                                    const char *const *param_names) {
+    // Jména parametrů lze přiřadit pouze již zaregistrované funkci.
     symbol_data *symbol = symtable_search_func(table, key);
 
     if (symbol == NULL || symbol->data.func.param_count != param_count ||
@@ -432,7 +530,7 @@ bool symtable_set_func_param_names(SymTable *table, const char *key, size_t para
         return false;
     }
 
-    // Zero-parameter functions need no name storage.
+    // Funkce bez parametrů nepotřebuje úložiště pro jména.
     if (param_count == 0) {
         return true;
     }
@@ -441,7 +539,7 @@ bool symtable_set_func_param_names(SymTable *table, const char *key, size_t para
         return false;
     }
 
-    // Validate all supplied entries before allocating any replacement storage.
+    // Všechna vstupní jména ověříme ještě před alokací náhradního pole.
     for (size_t i = 0; i < param_count; ++i) {
         if (param_names[i] == NULL || param_names[i][0] == '\0') {
             return false;
@@ -462,22 +560,30 @@ bool symtable_set_func_param_names(SymTable *table, const char *key, size_t para
         }
     }
 
-    // Publish only the complete replacement; inputs may alias the old names.
+    // Zveřejníme až úplnou kopii; vstupy mohou odkazovat na dosavadní jména.
     free_param_names(symbol->data.func.param_names, param_count);
     symbol->data.func.param_names = copies;
 
     return true;
 }
 
+/**
+ * @brief Zaregistruje deset vestavěných funkcí základního IFJ26.
+ *
+ * Uloží jejich názvy, návratové typy a typy parametrů. Každé vložení provádí samostatně a
+ * při prvním neúspěchu skončí.
+ * @param table Cílová tabulka symbolů.
+ * @return True, pokud se vložily všechny funkce; jinak false.
+ * @note Opakované volání po úspěchu narazí na duplicitní jména.
+ * @warning Operace není atomická: dříve vložené funkce při pozdějším selhání zůstávají v tabulce.
+ */
 bool symtable_insert_builtins(SymTable *table) {
     if (table == NULL) {
         return false;
     }
 
-    /*
-     * Describe builtin parameter types using temporary arrays.
-     * symtable_insert_func copies them before this function returns.
-     */
+    /* Typy parametrů vestavěných funkcí popíšeme dočasnými poli.
+     * symtable_insert_func() je před návratem z této funkce zkopíruje. */
     const data_type any_param[]             = {type_any};
     const data_type double_param[]          = {type_double};
     const data_type string_param[]          = {type_string};
@@ -485,15 +591,13 @@ bool symtable_insert_builtins(SymTable *table) {
     const data_type string_int_params[]     = {type_string, type_int};
     const data_type int_param[]             = {type_int};
 
-    /*
-     * Stop at the first failure.
-     * Functions inserted earlier in this call are not rolled back.
-     */
+    /* Při prvním neúspěchu skončíme.
+     * Dříve vložené funkce se zpětně neodstraňují. */
     if (!symtable_insert_func(table, "print", type_unit, 1, any_param)) {
         return false;
     }
 
-    /* Input functions take no arguments. */
+    // Vstupní vestavěné funkce nepřijímají argumenty.
     if (!symtable_insert_func(table, "readLine", type_string, 0, NULL)) {
         return false;
     }
@@ -504,7 +608,7 @@ bool symtable_insert_builtins(SymTable *table) {
         return false;
     }
 
-    /* Conversion functions use their declared argument types. */
+    // Převodní funkce zaregistrujeme s odpovídajícími typy parametrů.
     if (!symtable_insert_func(table, "toStr", type_string, 1, any_param)) {
         return false;
     }
@@ -512,7 +616,7 @@ bool symtable_insert_builtins(SymTable *table) {
         return false;
     }
 
-    /* Register string operations and character-code conversions. */
+    // Doplníme řetězcové operace a převody znakových kódů.
     if (!symtable_insert_func(table, "strLength", type_int, 1, string_param)) {
         return false;
     }
@@ -529,40 +633,56 @@ bool symtable_insert_builtins(SymTable *table) {
     return true;
 }
 
-/* Type metadata and compatibility. */
+// Metadata typů a kontrola jejich kompatibility.
 
+/**
+ * @brief Změní uložený návratový typ existující funkce.
+ * @param table Tabulka obsahující funkci.
+ * @param key Jméno funkce ukončené nulou.
+ * @param ret_type Nový návratový typ.
+ * @return True při změně; false, pokud funkce nebyla nalezena.
+ * @note Přípustnost aktualizace posuzuje parser nebo sémantický analyzátor.
+ */
 bool symtable_set_func_return_type(SymTable *table, const char *key, data_type ret_type) {
-    /* Update an existing declaration rather than creating another function. */
+    // Upravujeme existující deklaraci místo vytvoření nové funkce.
     symbol_data *symbol = symtable_search_func(table, key);
     if (symbol == NULL) {
         return false;
     }
 
-    /* The parser decides when updating the stored return type is permitted. */
+    // O přípustnosti změny návratového typu rozhoduje parser.
+    // Aktualizujeme uložený údaj o návratu, nikoli samotné tělo funkce.
     symbol->data.func.ret_type = ret_type;
     return true;
 }
 
+/**
+ * @brief Ověří kompatibilitu dvou uložených typů.
+ *
+ * Nejprve odmítne type_unknown. Jinak přijímá očekávaný type_any, shodné typy nebo
+ * implicitní rozšíření Int na Double.
+ * @param expected Požadovaný typ; může být type_any.
+ * @param actual Skutečný typ hodnoty.
+ * @return True pro uvedené případy kompatibility; jinak false.
+ * @note Neověřuje, zda je daný typ povolen v konkrétním kontextu zdrojového jazyka.
+ */
 bool symtable_type_compatible(data_type expected, data_type actual) {
-    /* An unresolved type cannot establish compatibility, even with itself. */
+    // Neodvozený typ nepotvrzuje kompatibilitu ani se stejným typem unknown.
     if (expected == type_unknown || actual == type_unknown) {
         return false;
     }
 
-    /* After unresolved types are rejected, expected Any accepts the actual type.
-     */
+    // Po vyloučení unknown přijímá očekávaný typ Any libovolný skutečný typ.
     if (expected == type_any) {
         return true;
     }
 
-    /* Matching resolved types require no implicit conversion. */
+    // Shodné známé typy nepotřebují implicitní převod.
     if (expected == actual) {
         return true;
     }
 
-    /*
-     * Int-to-Double widening is the only implicit conversion.
-     * This function reports compatibility; code generation performs conversion.
-     */
+    /* Jediný podporovaný implicitní převod je rozšíření Int na Double.
+     * Zde se ověřuje kompatibilita; samotný převod se provede v generovaném kódu. */
     return expected == type_double && actual == type_int;
 }

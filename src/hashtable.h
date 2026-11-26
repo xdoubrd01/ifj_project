@@ -1,15 +1,12 @@
 /**
- *@authors Denis Doubrava xdoubrd01
- *         Eliáš Oharek   xohare00
- * Tvorba komentářů byla za pomoci umělé inteligence: překlad, formátování a lepší formulace vět
- */
-
-/**
+ * @project Implementace překladače imperativního jazyka IFJ26
  * @file hashtable.h
- * @brief Generic hash table with open addressing and string keys.
- *
- * The table owns copies of its keys. Stored values are non-NULL pointers
- * owned by the caller. The internal representation is hidden.
+ * @author Denis Doubrava, Jakub Grásgruber, Eliáš Oharek, Michal Zedníček
+ * @brief Veřejné rozhraní hashovací tabulky s řetězcovými klíči
+ * a obecnými hodnotami. Deklaruje operace pro vytvoření a uvolnění
+ * tabulky a pro přístup k jejím položkám. Skrývá vnitřní reprezentaci
+ * tabulky a popisuje vlastnictví klíčů a uložených hodnot.
+ * @note AI byla využita k lepšímu znění a obsahu komentářů.
  */
 
 #ifndef HASHTABLE_H
@@ -18,90 +15,86 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+// Vnitřní buňky a jejich stavy nejsou součástí veřejného rozhraní.
 struct hashtable;
 
-/** @brief Opaque hash table type. */
+/**
+ * @brief Neprůhledný typ hashovací tabulky se skrytou reprezentací.
+ */
 typedef struct hashtable hashtable;
 
 /**
- * @brief Callback type for processing one stored value.
+ * @brief Typ obslužné funkce pro jednu uloženou hodnotu.
  *
- * The callback receives a stored data pointer and returns no value.
+ * Přijímá ukazatel data uložený v položce a nevrací výsledek. Slouží například pro uvolnění
+ * hodnot ve ht_foreach().
  */
 typedef void (*ht_value_callback)(void *);
 
 /**
- * @brief Creates an empty hash table.
- *
- * @param initial_capacity Initial number of cells; 0 selects the default.
- * @return A new table, or NULL if creation fails.
- *
- * @note The caller must eventually destroy the table using ht_free().
+ * @brief Vytvoří prázdnou hashovací tabulku.
+ * @param initial_capacity Počáteční počet buněk; 0 volí výchozí kapacitu 16.
+ * @return Nová tabulka, nebo NULL při nereprezentovatelné velikosti či selhání alokace.
+ * @note Vytvořenou tabulku musí volající nakonec zrušit pomocí ht_free().
  */
 hashtable *ht_create(size_t initial_capacity);
 
 /**
- * @brief Invokes a callback once for each occupied entry.
+ * @brief Zavolá obslužnou funkci pro každou obsazenou položku.
  *
- * @param ht Table to traverse. NULL is accepted and does nothing.
- * @param cb Callback to invoke. NULL is accepted and does nothing.
- *
- * @note Traversal order is unspecified. Empty and deleted cells are skipped.
- * @note A pointer shared by multiple entries is passed once per entry.
- *
- * @warning The callback must not insert, delete, or replace entries,
- * or destroy the table being traversed.
- * @warning If the callback frees values, it must avoid freeing shared values
- * more than once. When disposing of values, destroy the table afterwards
- * using ht_free(); the stored value pointers are no longer valid.
+ * Prázdné a odstraněné buňky se přeskakují. Pořadí není určeno; je-li stejný ukazatel uložen
+ * pod více klíči, obsluha jej dostane jednou za každou položku.
+ * @param ht Procházená tabulka; NULL se ignoruje.
+ * @param cb Obslužná funkce přijímající ukazatel na hodnotu; NULL se ignoruje.
+ * @warning Obsluha nesmí měnit položky ani zrušit právě procházenou tabulku.
+ * @warning Při uvolňování sdílených hodnot zabraňte opakovanému free(). Po uvolnění hodnot tabulku
+ * zrušte; její datové ukazatele již nejsou platné.
  */
 void ht_foreach(hashtable *ht, ht_value_callback cb);
 
 /**
- * @brief Inserts an entry or replaces the value of an existing key.
+ * @brief Vloží položku nebo nahradí hodnotu existujícího klíče.
  *
- * @param table Target table; must not be NULL.
- * @param key Null-terminated key; must not be NULL.
- * @param data Value pointer; must not be NULL.
- * @return true on success; false on invalid input or allocation failure.
- *
- * @note A new key is copied. The value itself is not copied.
- * @warning Replacing a value does not free the previous value.
- * The caller remains responsible for its lifetime.
+ * Při kolizi používá lineární prohledávání s návratem na začátek pole. Nový klíč kopíruje;
+ * samotná hodnota zůstává předaným ukazatelem. První buňku dead využije až po vyloučení
+ * existujícího shodného klíče.
+ * @param table Platná cílová tabulka.
+ * @param key Nenulový ukazatel na řetězec zakončený nulou.
+ * @param data Nenulový ukazatel na uloženou hodnotu.
+ * @return True při úspěchu; false při neplatných argumentech nebo selhání alokace.
+ * @warning Nahrazení hodnoty neuvolní předchozí hodnotu; její životnost řeší volající.
  */
 bool ht_insert(hashtable *table, const char *key, void *data);
 
 /**
- * @brief Finds a value by its key.
+ * @brief Vyhledá hodnotu podle řetězcového klíče.
  *
- * @param table Table to search.
- * @param key Null-terminated key to find.
- * @return The stored pointer, or NULL if absent or an argument is NULL.
- *
- * @note No value is copied and no ownership is transferred.
+ * Přes buňky dead pokračuje; buňka empty nebo prohledání celé kapacity znamená neúspěch.
+ * Obsah hodnoty nekopíruje a nepředává její vlastnictví.
+ * @param table Prohledávaná tabulka.
+ * @param key Hledaný klíč zakončený nulou.
+ * @return Uložený ukazatel, nebo NULL při neúspěchu či neplatných argumentech.
  */
 void *ht_search(hashtable *table, const char *key);
 
 /**
- * @brief Removes an entry by its key.
+ * @brief Odstraní položku a zachová návaznost prohledávání.
  *
- * @param table Table from which to remove the entry.
- * @param key Null-terminated key to remove.
- * @return true if removed; false if absent or an argument is NULL.
- *
- * @note Frees the copied key, but does not free the stored value.
- * Retrieve the value before removal if its pointer is needed for cleanup.
+ * Uvolní kopii klíče, vyprázdní ukazatele buňky a nastaví stav dead. Sníží počet obsazených
+ * buněk size, nikoli počet použitých buněk used.
+ * @param table Tabulka obsahující odstraňovanou položku.
+ * @param key Klíč odstraňované položky zakončený nulou.
+ * @return True při odstranění; false při nenalezení klíče nebo neplatných argumentech.
+ * @note Hodnotu neuvolňuje; potřebný ukazatel si volající musí získat před odstraněním.
  */
 bool ht_delete(hashtable *table, const char *key);
 
 /**
- * @brief Destroys the table, its copied keys, and its cell array.
- *
- * @param table Table created by ht_create(). NULL is accepted.
- *
- * @warning Stored values are not freed; the caller is responsible for them.
- * @warning The table pointer becomes invalid after destruction.
- * This function does not reset the caller's pointer to NULL.
+ * @brief Zruší tabulku, její kopie klíčů a pole buněk.
+ * @param table Tabulka vytvořená ht_create(); NULL se ignoruje.
+ * @warning Uložené hodnoty se neuvolňují; jejich zrušení musí zajistit volající.
+ * @warning Předaný ukazatel po návratu není platný; proměnná volajícího se automaticky nenastaví na
+ * NULL.
  */
 void ht_free(hashtable *table);
 

@@ -1,13 +1,12 @@
 /**
- * @author Denis Doubrava xdoubrd01
- * Použitý model: GPT-6.1 Sol
- * Tvorba komentářů byla za pomoci umělé inteligence: překlad, formátování a
- * lepší formulace vět.
- */
-
-/**
+ * @project Implementace překladače imperativního jazyka IFJ26
  * @file scanner.c
- * @brief Stateful lexical analyzer for the base IFJ26 language.
+ * @author Denis Doubrava (xdoubrd01)
+ * @brief Lexikální analýza vstupu, rozpoznávání tokenů a zpracování odsazení.
+ * Čte znaky z paměťového bufferu nebo vstupního proudu a vrací tokeny
+ * volajícímu analyzátoru. Zpracovává komentáře, řetězce a logické řádky
+ * a používá dynamický zásobník úrovní odsazení.
+ * @note AI byla využita k lepšímu znění a obsahu komentářů.
  */
 
 #include "scanner.h"
@@ -22,86 +21,97 @@
 #include <stdlib.h>
 #include <string.h>
 
-/**
- * @brief Resizable buffer used while reading a lexeme.
- *
- * The buffer always contains a terminating zero after its contents.
- * Its allocated storage can be reused for subsequent tokens.
- */
 typedef DynamicBuffer DynamicString;
 
-/* The stream belongs to the caller; the scanner never closes it. */
+// Vstupní proud vlastní volající; scanner jej nikdy nezavírá.
 static FILE *source = NULL;
-// AI ASSISTED START
-// AI PROMPT: Podporuj pametovy vstup bez fmemopen a zachovej FILE vstup.
-static const unsigned char *memory_source   = NULL;
-static size_t               memory_length   = 0;
-static size_t               memory_position = 0;
-// AI ASSISTED END
-static DynamicString buffer;
+// ZAČÁTEK ČÁSTI S ASISTENCÍ AI
+// Zadání AI: Podporuj pametovy vstup bez fmemopen a zachovej FILE vstup.
+static const unsigned char *memory_source   = NULL; ///< Nevlastněný ukazatel na paměťový vstup.
+static size_t               memory_length   = 0;    ///< Přesný počet dostupných vstupních bajtů.
+static size_t               memory_position = 0;    ///< Pozice příštího bajtu při paměťovém čtení.
+// KONEC ČÁSTI S ASISTENCÍ AI
+static DynamicString buffer; ///< Opakovaně používaný pracovní buffer aktuálního lexému.
 
-/* Only one scanner instance is active at a time. */
-static size_t *indent_stack        = NULL;
-static size_t  indent_capacity     = 0;
-static size_t  indent_top          = 0;
-static size_t  pending_dedents     = 0;
-static bool    at_line_start       = true;
-static bool    line_has_token      = false;
-static size_t  paren_depth         = 0;
-static size_t  logical_line_indent = 0;
-static bool    continuation_line   = false;
-static bool    skipped_newline     = false;
+// Modul udržuje jediný aktivní stav scanneru; není určen pro souběžné vstupy.
+static size_t *indent_stack    = NULL;  ///< Dynamické pole úrovní odsazení se základní hodnotou 0.
+static size_t  indent_capacity = 0;     ///< Kapacita pole úrovní.
+static size_t  indent_top      = 0;     ///< Index aktuálního vrcholu zásobníku, nikoli počet prvků.
+static size_t  pending_dedents = 0;     ///< Počet naplánovaných DEDENTů dosud nepředaných parseru.
+static bool    at_line_start   = true;  ///< Zda má další krok zpracovat začátek fyzického řádku.
+static bool    line_has_token  = false; ///< Zda aktuální logický řádek obsahuje skutečný token.
+static size_t  paren_depth     = 0;     ///< Počet dosud otevřených kulatých závorek.
+static size_t  logical_line_indent =
+    0; ///< Odsazení výchozího logického řádku pro kontrolu pokračování.
+static bool continuation_line = false; ///< Příznak fyzického pokračování uvnitř závorek.
+static bool skipped_newline   = false; ///< LF přeskočené před příštím skutečným lexémem.
 
-/* Two slots avoid relying on multiple successful calls to ungetc(). */
+// Dvě pozice pro vrácené znaky nahrazují závislost na opakovaném ungetc().
 static int    pushed_chars[2];
-static size_t pushed_count = 0;
+static size_t pushed_count = 0; ///< Počet aktuálně vrácených znaků.
 
 /**
- * @brief Tests an ASCII digit independently of the active character locale.
+ * @brief Ověří ASCII číslici nezávisle na nastavení locale.
+ * @param c Načtený bajt nebo EOF.
+ * @return True pouze pro znaky 0 až 9.
  */
 static bool is_digit(int c) { return c >= '0' && c <= '9'; }
 
 /**
- * @brief Tests an ASCII letter independently of the active character locale.
+ * @brief Ověří ASCII písmeno nezávisle na nastavení locale.
+ * @param c Načtený bajt nebo EOF.
+ * @return True pouze pro A až Z a a až z.
  */
 static bool is_letter(int c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'); }
 
 /**
- * @brief Tests a character permitted after the first identifier character.
+ * @brief Ověří znak přípustný po prvním znaku identifikátoru.
+ * @param c Načtený bajt nebo EOF.
+ * @return True pro ASCII písmeno, číslici nebo podtržítko.
  */
 static bool is_name_char(int c) { return is_letter(c) || is_digit(c) || c == '_'; }
 
 /**
- * @brief Reads buffered lookahead first, then the caller-owned stream.
+ * @brief Načte znak nejprve z vrácených znaků a poté ze zvoleného vstupu.
+ *
+ * Vlastní dvouprvkový zásobník má přednost. Paměťový vstup čte podle pozice a délky, jinak
+ * použije fgetc() nad proudem volajícího.
+ * @return Další bajt jako int, nebo EOF při vyčerpání vstupu.
+ * @note Chybu proudového čtení dodatečně rozliší get_next_token().
  */
 static int read_char(void) {
+    // Nejprve zpracujeme znaky načtené předčasně při rozpoznávání předchozího tokenu.
     if (pushed_count > 0) {
         return pushed_chars[--pushed_count];
     }
 
+    // Paměťový vstup nepotřebuje terminátor; jeho konec určuje počet dostupných bajtů.
     if (memory_source != NULL) {
         if (memory_position >= memory_length)
             return EOF;
         return memory_source[memory_position++];
     }
 
+    // Pokud není nastaven paměťový vstup, čteme z proudu vlastněného volajícím.
     return fgetc(source);
 }
 
 /**
- * @brief Appends one character and preserves the terminating zero.
- *
- * @return 0 on success or 99 on allocation failure or size overflow.
+ * @brief Připojí znak do dynamického řetězce a zachová jeho terminátor.
+ * @param s Inicializovaný dynamický buffer.
+ * @param c Připojovaný znak.
+ * @return 0 při úspěchu, jinak 99 při selhání rezervace nebo přetečení velikosti.
  */
 static int ds_append(DynamicString *s, char c) { return dynamic_buffer_append_char(s, c) ? 0 : 99; }
 
 /**
- * @brief Copies the lexeme into a caller-owned token attribute.
+ * @brief Zkopíruje obsah lexému do vlastněného atributu tokenu.
  *
- * @return 0 on success or 99 if allocation fails.
- *
- * @note The parser must free this copy.
- * @note The returned attribute survives reuse of the shared scanner buffer.
+ * Kopie přežije další použití pracovního bufferu scanneru. Funkce nepřepisuje typ tokenu a
+ * neuvolňuje případný předchozí atribut.
+ * @param token Token s již nastaveným typem, jehož s_val se má vyplnit.
+ * @return 0 při úspěchu, jinak 99 při selhání alokace.
+ * @note Vrácenou kopii musí volající později uvolnit, například pomocí token_destroy().
  */
 static int set_string_attribute(Token *token) {
     const char *src        = buffer.data != NULL ? buffer.data : "";
@@ -110,11 +120,15 @@ static int set_string_attribute(Token *token) {
 }
 
 /**
- * @brief Stores lookahead locally; EOF requires no pushback.
+ * @brief Vrátí znak do interního zásobníku pro příští čtení.
  *
- * @return 0 on success or 99 if the internal pushback buffer is full.
+ * Znaky se vybírají v opačném pořadí vložení. EOF se neukládá, protože neoznačuje skutečný
+ * bajt vstupu.
+ * @param c Znak určený k opětovnému zpracování, případně EOF.
+ * @return 0 při úspěchu nebo EOF, jinak 99 při zaplnění zásobníku.
  */
 static int push_char(int c) {
+    // EOF není skutečný znak a do zásobníku vrácených bajtů nepatří.
     if (c == EOF) {
         return 0;
     }
@@ -123,16 +137,12 @@ static int push_char(int c) {
         return 99;
     }
 
+    // Vracení více znaků funguje jako zásobník: poslední vložený se načte jako první.
     pushed_chars[pushed_count++] = c;
 
     return 0;
 }
 
-/**
- * @brief Ensures that the indentation stack can hold the requested levels.
- *
- * @return 0 on success or 99 on allocation failure or size overflow.
- */
 /**
  * Začátek AI části
  * Použitý model: GPT-6.1 Sol
@@ -142,6 +152,13 @@ static int push_char(int c) {
  * Prověř omezení pevně velkého zásobníku odsazení. Pokud omezuje zpracování
  * platného vstupu, převeď jej na dynamicky zvětšovaný zásobník. Ošetři selhání
  * alokace, přetečení velikostí a uvolnění paměti.
+ */
+/**
+ * @brief Zajistí kapacitu pro požadovaný počet úrovní odsazení.
+ *
+ * Kapacita roste pomocí array_next_capacity(); hodnoty uložených úrovní zůstávají zachovány.
+ * @param required Požadovaný počet prvků zásobníku včetně základní úrovně.
+ * @return 0 při úspěchu, jinak 99 při přetečení nebo selhání alokace.
  */
 static int reserve_indents(size_t required) {
     if (required <= indent_capacity) {
@@ -169,12 +186,15 @@ static int reserve_indents(size_t required) {
  */
 
 /**
- * @brief Emits remaining block endings before the final EOF token.
+ * @brief Před konečným EOF vrátí zbývající ukončení bloků.
  *
- * Only one token can be returned per call. Additional DEDENT tokens are
- * therefore queued and delivered by subsequent calls.
+ * Pokud zásobník obsahuje lokální úrovně, vyprázdní jej na základní úroveň, vrátí první
+ * DEDENT a zbytek naplánuje do pending_dedents. Dodatečný EOL nevytváří.
+ * @param token Cílový token pro DEDENT nebo EOF.
+ * @return Vždy 0; další DEDENTy se vracejí při následujících voláních.
  */
 static int emit_eof(Token *token) {
+    // Před koncovým EOF musíme parseru oznámit uzavření zbývajících bloků.
     if (indent_top > 0) {
         pending_dedents = indent_top - 1;
         indent_top      = 0;
@@ -187,9 +207,12 @@ static int emit_eof(Token *token) {
 }
 
 /**
- * @brief Recognizes base-language keywords.
+ * @brief Rozliší klíčové slovo či název typu od běžného identifikátoru.
  *
- * Other names, including extension-only words, remain identifiers here.
+ * Porovnává celé jméno s podporovanými slovy základního jazyka. Nepodporovaná slova
+ * rozšíření zůstávají identifikátory.
+ * @param text Úplné jméno ukončené nulovým znakem.
+ * @return Odpovídající TokenType; při neshodě TOKEN_IDENTIFIER.
  */
 static TokenType keyword_or_identifier(const char *text) {
     if (strcmp(text, "def") == 0)
@@ -238,17 +261,17 @@ static TokenType keyword_or_identifier(const char *text) {
 }
 
 /**
- * @brief Removes digit separators and converts an Int literal.
- *
- * @return 0 on success or 99 on temporary-buffer allocation failure.
- *
- * @note Integer overflow is not checked, as permitted by the assignment.
+ * @brief Odstraní oddělovače číslic a převede literál na Int.
+ * @param text Lexikálně ověřený zápis celého čísla.
+ * @param [out] out Místo pro výslednou hodnotu.
+ * @return 0 při úspěchu, jinak 99 při selhání pomocného bufferu.
+ * @note Přetečení rozsahu Int se v této funkci nekontroluje.
  */
 static int convert_int(const char *text, int *out) {
     DynamicString tmp;
     dynamic_buffer_init(&tmp);
 
-    /* strtol() does not accept the source-language underscore separators. */
+    // strtol() nepřijímá podtržítka zdrojového zápisu, proto je před převodem vynecháme.
     for (size_t i = 0; text[i] != '\0'; ++i) {
         if (text[i] != '_') {
             int rc = ds_append(&tmp, text[i]);
@@ -268,13 +291,14 @@ static int convert_int(const char *text, int *out) {
 }
 
 /**
- * @brief Removes separators and suffix before converting a Double literal.
+ * @brief Odstraní podtržítka a příponu a převede zápis na Double.
  *
- * @return 0 on success, 1 on a rejected conversion, or 99 on allocation
- * failure.
- *
- * @note Representable nonzero subnormal values are accepted.
- * @note Conversion assumes the standard C numeric locale.
+ * Převod odmítá nekonečný výsledek, neúplné zpracování zápisu a úplné podtečení na nulu s
+ * ERANGE. Nenulové reprezentovatelné subnormální výsledky přijímá.
+ * @param text Lexikálně ověřený zápis desetinného literálu.
+ * @param [out] out Místo pro výslednou hodnotu.
+ * @return 0 při úspěchu, 1 při neplatném výsledku převodu, 99 při selhání bufferu.
+ * @note Předpokládá standardní číselné locale jazyka C.
  */
 static int convert_double(const char *text, double *out) {
     DynamicString tmp;
@@ -287,7 +311,7 @@ static int convert_double(const char *text, double *out) {
             continue;
         }
 
-        /* The optional source-language suffix is not passed to strtod(). */
+        // Volitelnou koncovou příponu d/D nepředáváme funkci strtod().
         if ((c == 'd' || c == 'D') && text[i + 1] == '\0') {
             continue;
         }
@@ -300,11 +324,12 @@ static int convert_double(const char *text, double *out) {
         }
     }
 
+    // Stav errno nulujeme před převodem, aby nezůstala chyba starší knihovní operace.
     errno        = 0;
     char  *end   = NULL;
     double value = strtod(tmp.data != NULL ? tmp.data : "0", &end);
 
-    /* Reject overflow and complete underflow of a nonzero literal to zero. */
+    // Odmítneme nekonečný výsledek a úplné podtečení nenulové hodnoty na nulu.
     if (!isfinite(value) || end == NULL || *end != '\0' || (errno == ERANGE && value == 0.0)) {
         dynamic_buffer_free(&tmp);
         return 1;
@@ -318,13 +343,16 @@ static int convert_double(const char *text, double *out) {
 }
 
 /**
- * @brief Consumes a block comment after its opening delimiter was read.
+ * @brief Přeskočí blokový komentář po již načteném otevření.
  *
- * @param had_newline Receives true if the comment contained LF.
- * @return 0 on success, 1 for an unterminated comment, or 99 on counter
- * overflow.
+ * Čítač depth začíná na 1 a umožňuje vnořené komentáře. Každý výskyt LF zaznamená i do
+ * příznaku skipped_newline.
+ * @param [out] had_newline Příznak, zda obsah komentáře zahrnoval LF; musí být platným ukazatelem.
+ * @return 0 při ukončení, 1 při EOF uvnitř komentáře, 99 při přetečení čítače či chybě vrácení
+ * znaku.
  */
 static int consume_block_comment(bool *had_newline) {
+    // Otevírací dvojice již byla načtena; počáteční hloubka proto není nulová.
     size_t depth = 1;
     *had_newline = false;
 
@@ -335,6 +363,7 @@ static int consume_block_comment(bool *had_newline) {
             return 1;
         }
 
+        // Nový řádek v komentáři ovlivňuje příznak tokenu i dokončení logického řádku.
         if (c == '\n') {
             skipped_newline = true;
             *had_newline    = true;
@@ -345,7 +374,7 @@ static int consume_block_comment(bool *had_newline) {
             int next = read_char();
 
             if (next == '*') {
-                /* Every nested opening requires its own closing delimiter. */
+                // Každé vnořené otevření vyžaduje vlastní odpovídající ukončení.
                 if (depth == SIZE_MAX) {
                     return 99;
                 }
@@ -375,12 +404,12 @@ static int consume_block_comment(bool *had_newline) {
 }
 
 /**
- * @brief Finishes a block comment that contained a physical newline.
+ * @brief Dokončí obsluhu blokového komentáře obsahujícího LF.
  *
- * @return 0 if EOL was produced, -1 to continue scanning, or 1 on lexical
- * error.
- *
- * @note Only whitespace may follow the closing delimiter before LF or EOF.
+ * Za uzavřením smí do dalšího LF nebo EOF následovat jen bílé znaky. Podle závorek a obsahu
+ * logického řádku buď vytvoří EOL, nebo připraví pokračování scanneru.
+ * @param token Výstupní token pro případný EOL.
+ * @return 0 při vytvoření EOL, -1 pro pokračování čtení, 1 při nepřípustném znaku za komentářem.
  */
 static int finish_multiline_comment(Token *token) {
     int c;
@@ -398,14 +427,14 @@ static int finish_multiline_comment(Token *token) {
     if (paren_depth > 0) {
         continuation_line = true;
 
-        /* The same logical line continues inside parentheses. */
+        // Uvnitř závorek pokračuje stejný logický řádek bez EOL.
         return -1;
     }
 
     continuation_line = false;
 
     if (!line_has_token) {
-        /* A comment-only line does not produce a statement separator. */
+        // Samostatný komentář bez předchozího tokenu nevytváří oddělovač příkazů.
         return -1;
     }
 
@@ -416,13 +445,6 @@ static int finish_multiline_comment(Token *token) {
 }
 
 /**
- * @brief Measures indentation while ignoring blank and comment-only lines.
- *
- * @return 0 if a token was produced, -1 to continue scanning, or 1/99 on error.
- *
- * @note Continuation lines inside parentheses never create block markers.
- */
-/**
  * Začátek AI části
  * Použitý model: GPT-6.1 Sol
  * Rozsah: Úpravy původní funkce pro práci s dynamickým zásobníkem.
@@ -431,6 +453,15 @@ static int finish_multiline_comment(Token *token) {
  * Prověř omezení pevně velkého zásobníku odsazení. Pokud omezuje zpracování
  * platného vstupu, převeď jej na dynamicky zvětšovaný zásobník. Ošetři selhání
  * alokace, přetečení velikostí a uvolnění paměti.
+ */
+/**
+ * @brief Změří odsazení a přeskočí prázdné a komentářové řádky.
+ *
+ * Na tokenovém řádku odmítá nepovolené bílé znaky v prefixu a ověřuje návrat na uloženou
+ * úroveň. Uvnitř závorek kontroluje pokračovací odsazení bez změn zásobníku bloků.
+ * @param token Výstupní místo pro INDENT, DEDENT nebo EOF.
+ * @return 0 při vytvoření tokenu, -1 pro pokračování čtení lexému, 1 při lexikální chybě nebo 99
+ * při interním selhání.
  */
 static int handle_line_start(Token *token) {
     size_t spaces                    = 0;
@@ -441,7 +472,7 @@ static int handle_line_start(Token *token) {
         int c;
 
         if (!indentation_locked) {
-            /* Only literal spaces contribute to the indentation width. */
+            // Do šířky odsazení započítáváme pouze obyčejné mezery.
             while (true) {
                 c = read_char();
 
@@ -462,11 +493,8 @@ static int handle_line_start(Token *token) {
                 break;
             }
         } else {
-            /*
-             * A same-line block comment before the first token behaves as
-             * whitespace. Spaces after it no longer belong to the initial
-             * indentation prefix.
-             */
+            /* Jednořádkový blokový komentář před prvním tokenem nahrazuje bílé místo.
+             * Mezery za ním již nezvyšují původně naměřený prefix odsazení. */
             do {
                 c = read_char();
 
@@ -476,7 +504,7 @@ static int handle_line_start(Token *token) {
             } while (c == ' ' || c == '\t' || c == '\f' || c == '\v');
         }
 
-        /* Accept CRLF input as a physical line ending. */
+        // CR přijímáme jako fyzický konec řádku pouze v dvojici CRLF.
         if (c == '\r') {
             int next = read_char();
 
@@ -490,7 +518,7 @@ static int handle_line_start(Token *token) {
         if (c == '\n') {
             skipped_newline = true;
 
-            /* Blank lines do not change indentation. */
+            // Prázdný řádek nevytváří novou úroveň odsazení.
             spaces                    = 0;
             indentation_locked        = false;
             invalid_indent_whitespace = false;
@@ -506,7 +534,7 @@ static int handle_line_start(Token *token) {
             return emit_eof(token);
         }
 
-        /* Comment-only lines must not change indentation. */
+        // Ani řádky obsahující pouze komentáře nemění blokové odsazení.
         if (c == '/') {
             int next = read_char();
 
@@ -553,13 +581,13 @@ static int handle_line_start(Token *token) {
                     continue;
                 }
 
-                /* Preserve spaces measured before a same-line block comment. */
+                // Zachováme počet mezer naměřený před jednořádkovým blokovým komentářem.
                 indentation_locked = true;
 
                 continue;
             }
 
-            /* This slash is an operator rather than a comment opening. */
+            // Nejde o začátek komentáře; vrátíme lomítko a další znak pro rozpoznání dělení.
             if (invalid_indent_whitespace) {
                 return 1;
             }
@@ -568,7 +596,7 @@ static int handle_line_start(Token *token) {
                 return 99;
             }
         } else {
-            /* The physical line contains a real token. */
+            // Na fyzickém řádku začíná skutečný lexém.
             if (invalid_indent_whitespace) {
                 return 1;
             }
@@ -579,10 +607,8 @@ static int handle_line_start(Token *token) {
         }
 
         if (paren_depth > 0) {
-            /*
-             * A continuation must be indented beyond the beginning of its
-             * logical line, without changing the block indentation stack.
-             */
+            /* Pokračovací řádek musí být odsazen více než začátek logického řádku.
+             * Zásobník blokového odsazení se přitom nemění. */
             if (continuation_line && spaces <= logical_line_indent) {
                 return 1;
             }
@@ -598,7 +624,7 @@ static int handle_line_start(Token *token) {
         logical_line_indent = spaces;
 
         if (spaces > indent_stack[indent_top]) {
-            /* Allocate another level instead of imposing a fixed depth limit. */
+            // Přidáme novou úroveň do dynamického zásobníku bez pevného limitu hloubky.
             if (indent_top > SIZE_MAX - 2 || reserve_indents(indent_top + 2) != 0) {
                 return 99;
             }
@@ -612,17 +638,18 @@ static int handle_line_start(Token *token) {
         if (spaces < indent_stack[indent_top]) {
             size_t count = 0;
 
-            /* One physical line may close multiple nested blocks. */
+            // Jediný fyzický řádek může současně uzavřít několik vnořených bloků.
             while (indent_top > 0 && spaces < indent_stack[indent_top]) {
                 --indent_top;
                 ++count;
             }
 
-            /* A dedent must return to an existing indentation level. */
+            // Menší odsazení se musí přesně shodovat s některou již uloženou úrovní.
             if (spaces != indent_stack[indent_top]) {
                 return 1;
             }
 
+            // Jeden DEDENT vrátíme nyní; ostatní čekají na další volání scanneru.
             pending_dedents = count - 1;
             token->type     = TOKEN_DEDENT;
 
@@ -639,9 +666,13 @@ static int handle_line_start(Token *token) {
  */
 
 /**
- * @brief Reads an ASCII name and classifies keywords.
+ * @brief Načte celé ASCII jméno a určí jeho typ tokenu.
  *
- * A lone underscore is not an identifier in the base language.
+ * První znak již načetl volající. Samotné podtržítko odmítá; ostatní jména předá klasifikaci
+ * klíčových slov. Identifikátor získá vlastní kopii textového atributu.
+ * @param token Výstupní token.
+ * @param first Již načtené počáteční písmeno nebo podtržítko.
+ * @return 0 při úspěchu, 1 pro samotné podtržítko, 99 při selhání bufferu nebo alokace.
  */
 static int read_identifier(Token *token, int first) {
     dynamic_buffer_clear(&buffer);
@@ -659,6 +690,7 @@ static int read_identifier(Token *token, int first) {
     if (push_char(c) != 0)
         return 99;
 
+    // Podtržítko lze použít v delším jménu, ale samotné v základním jazyce neplatí.
     if (buffer.length == 1 && buffer.data[0] == '_') {
         return 1;
     }
@@ -673,11 +705,13 @@ static int read_identifier(Token *token, int first) {
 }
 
 /**
- * @brief Reads digits with optional runs of underscores between digits.
+ * @brief Připojí posloupnost číslic s volitelnými skupinami podtržítek.
  *
- * @param first_digit First digit, or a negative value if already appended.
- * @param terminator Receives the first character outside the digit sequence.
- * @return 0 on success, 1 on invalid separators, or 99 on allocation failure.
+ * Více podtržítek za sebou je dovoleno pouze mezi číslicemi. První znak mimo posloupnost
+ * předá volajícímu bez jeho vracení do zásobníku.
+ * @param first_digit První číslice, nebo záporná hodnota, pokud již byla připojena.
+ * @param [out] terminator První znak za posloupností, případně EOF.
+ * @return 0 při úspěchu, 1 pro neplatné oddělovače, 99 při nedostatku paměti.
  */
 static int append_digit_sequence(int first_digit, int *terminator) {
     if (first_digit >= 0) {
@@ -699,7 +733,7 @@ static int append_digit_sequence(int first_digit, int *terminator) {
         }
 
         if (c == '_') {
-            /* Multiple separators are valid, but a digit must follow the run. */
+            // Po libovolně dlouhé skupině podtržítek musí následovat číslice.
             do {
                 if (ds_append(&buffer, '_') != 0)
                     return 99;
@@ -723,7 +757,9 @@ static int append_digit_sequence(int first_digit, int *terminator) {
 }
 
 /**
- * @brief Rejects an invalid numeric suffix and preserves the next delimiter.
+ * @brief Ověří znak za číslem a vrátí přípustný oddělovač do vstupu.
+ * @param c První dosud nezpracovaný znak za číselným literálem.
+ * @return 1 pro písmeno nebo podtržítko; jinak výsledek push_char(), tedy 0 nebo 99.
  */
 static int finish_number_delimiter(int c) {
     if (is_letter(c) || c == '_') {
@@ -734,13 +770,6 @@ static int finish_number_delimiter(int c) {
 }
 
 /**
- * @brief Reads an Int or Double literal.
- *
- * Supports fractional parts, exponents, digit separators, and the optional
- * d/D suffix on the supported Double forms.
- */
-
-/**
  * Začátek AI části
  * Použitý model: GPT-6.1 Sol
  * Rozsah: Úpravy původního rozpoznávání číselných literálů.
@@ -748,6 +777,16 @@ static int finish_number_delimiter(int c) {
  * poznatky z fóra. Otestuj podtržítka mezi číslicemi, exponenty, přípony a
  * úvodní nuly. Zápisy jako 01.5 musí být odmítnuty, zatímco 0.5, .5 a 2e001
  * mají být přijaty. Nalezené chyby oprav a vysvětli změny v implementaci.
+ */
+
+/**
+ * @brief Rozpozná literál Int nebo Double a převede jeho hodnotu.
+ *
+ * Podporuje desetinnou část, exponent, podtržítka mezi číslicemi a příponu d/D u desetinných
+ * forem. Tečku následovanou jménem ponechá pro členský přístup VALMEM.
+ * @param token Výstupní token s číselným atributem.
+ * @param first První načtená číslice, nebo tečka u zápisu typu .5.
+ * @return 0 při úspěchu, 1 pro neplatný zápis či převod Double, 99 při interní chybě.
  */
 static int read_number(Token *token, int first) {
     dynamic_buffer_clear(&buffer);
@@ -776,7 +815,7 @@ static int read_number(Token *token, int first) {
             return rc;
         }
     } else {
-        /* A leading zero must be the only digit of the whole-number part. */
+        // Počáteční nula musí být jedinou číslicí celé části literálu.
         if (first == '0') {
             if (ds_append(&buffer, '0') != 0) {
                 return 99;
@@ -784,7 +823,7 @@ static int read_number(Token *token, int first) {
 
             term = read_char();
 
-            /* Reject additional whole-part digits, including separated ones. */
+            // Další číslice celé části nejsou povoleny ani při oddělení podtržítkem.
             if (is_digit(term) || term == '_') {
                 return 1;
             }
@@ -799,7 +838,7 @@ static int read_number(Token *token, int first) {
         if (term == '.') {
             int c = read_char();
             if (is_letter(c) || c == '_') {
-                /* VALMEM: keep the member dot and the first name character. */
+                // VALMEM: znak jména vrátíme nyní, tečku vrátí dokončení číselného tokenu.
                 if (push_char(c) != 0)
                     return 99;
             } else {
@@ -815,6 +854,7 @@ static int read_number(Token *token, int first) {
         }
     }
 
+    // Exponent může následovat po celé i desetinné části a mění výsledný typ na Double.
     if (term == 'e' || term == 'E') {
         has_exponent = true;
 
@@ -830,7 +870,7 @@ static int read_number(Token *token, int first) {
             c = read_char();
         }
 
-        /* An exponent sign must be followed by at least one digit. */
+        // Po e/E a případném znaménku musí být alespoň jedna číslice exponentu.
         if (!is_digit(c)) {
             return 1;
         }
@@ -841,9 +881,10 @@ static int read_number(Token *token, int first) {
             return rc;
     }
 
+    // Přípona je povolena jen po desetinné části nebo exponentu.
     if (term == 'd' || term == 'D') {
         if (!has_fraction && !has_exponent) {
-            /* For example, 1d is not one of the specified Double forms. */
+            // Samotná celá část s d/D, například 1d, není podporovanou formou Double.
             return 1;
         }
 
@@ -864,13 +905,14 @@ static int read_number(Token *token, int first) {
     if (rc != 0)
         return rc;
 
+    // Typ literálu je dán jeho zápisem; převod hodnoty následuje až po lexikální kontrole.
     if (has_fraction || has_exponent) {
         token->type = TOKEN_DOUBLE_LITERAL;
 
         return convert_double(buffer.data, &token->attribute.d_val);
     }
 
-    /* The leading-zero restriction applies to nonzero Int literals only. */
+    // Doplňková kontrola zápisu Int začínajícího nulou; další číslice již odmítla předchozí větev.
     if (buffer.data[0] == '0') {
         for (size_t i = 1; i < buffer.length; ++i) {
             if (buffer.data[i] >= '1' && buffer.data[i] <= '9') {
@@ -888,9 +930,12 @@ static int read_number(Token *token, int first) {
  */
 
 /**
- * @brief Decodes the five supported escapes in a single-line string.
+ * @brief Načte běžný řetězec a dekóduje pět podporovaných escape sekvencí.
  *
- * @return 0 on success, 1 on invalid contents, or 99 on allocation failure.
+ * Otevírací uvozovka již byla spotřebována. Doslovné LF, CR, EOF nebo nepodporovaný escape
+ * odmítá jako lexikální chybu.
+ * @param token Výstupní řetězcový token s vlastní kopií hodnoty.
+ * @return 0 při úspěchu, 1 při neplatném obsahu či ukončení, 99 při nedostatku paměti.
  */
 static int read_normal_string(Token *token) {
     dynamic_buffer_clear(&buffer);
@@ -898,6 +943,7 @@ static int read_normal_string(Token *token) {
     while (true) {
         int c = read_char();
 
+        // Běžný řetězec nesmí pokračovat přes fyzický konec řádku.
         if (c == EOF || c == '\n' || c == '\r') {
             return 1;
         }
@@ -908,7 +954,7 @@ static int read_normal_string(Token *token) {
             return set_string_attribute(token);
         }
 
-        /* Only the escapes explicitly listed in the assignment are accepted. */
+        // Přijímáme pouze escape sekvence výslovně uvedené ve specifikaci.
         if (c == '\\') {
             int esc = read_char();
 
@@ -944,12 +990,6 @@ static int read_normal_string(Token *token) {
 }
 
 /**
- * @brief Reads raw contents and consumes the entire closing quote run.
- *
- * A run of at least three quotes closes the literal. Its final three quotes
- * are delimiters; any preceding quotes in that run belong to the value.
- */
-/**
  * Začátek AI části
  * Použitý model: GPT-6.1 Sol
  * Rozsah: Přepracování zpracování uzavírací řady uvozovek.
@@ -957,6 +997,14 @@ static int read_normal_string(Token *token) {
  * upřesnění z fóra. Otestuj především vstupy tvořené sedmi a osmi uvozovkami za
  * sebou, jednotlivé uvozovky uvnitř řetězce a neukončené řetězce. Oprav funkci
  * tak, aby správně rozlišovala obsah řetězce a jeho ukončovací uvozovky.
+ */
+/**
+ * @brief Načte víceřádkový řetězec bez dekódování escape sekvencí.
+ *
+ * Načte vždy celou souvislou řadu uvozovek. Obsahuje-li alespoň tři, poslední tři tvoří
+ * ukončení a předchozí uvozovky z této řady zůstanou součástí hodnoty.
+ * @param token Výstupní řetězcový token.
+ * @return 0 při úspěchu, 1 pro EOF před uzavřením, 99 při selhání bufferu či kopie atributu.
  */
 static int read_multiline_string(Token *token) {
     dynamic_buffer_clear(&buffer);
@@ -967,7 +1015,7 @@ static int read_multiline_string(Token *token) {
         if (c == '"') {
             size_t quotes = 0;
 
-            /* Read the complete consecutive run before deciding its contents. */
+            // Než rozhodneme o obsahu a ukončení, načteme celou řadu uvozovek.
             do {
                 if (ds_append(&buffer, '"') != 0) {
                     return 99;
@@ -977,8 +1025,10 @@ static int read_multiline_string(Token *token) {
                 c = read_char();
             } while (c == '"');
 
+            // Celá souvislá řada je načtena; teprve nyní lze oddělit obsah od posledních tří
+            // uvozovek.
             if (quotes >= 3) {
-                /* Remove only the final three delimiter quotes. */
+                // Z hodnoty odebereme pouze poslední tři uvozovky tvořící uzavírací oddělovač.
                 buffer.length -= 3;
                 buffer.data[buffer.length] = '\0';
 
@@ -991,14 +1041,14 @@ static int read_multiline_string(Token *token) {
                 return set_string_attribute(token);
             }
 
-            /* One or two quotes were already appended as ordinary contents. */
+            // Jedna či dvě uvozovky již byly připojeny jako běžný obsah řetězce.
         }
 
         if (c == EOF) {
             return 1;
         }
 
-        /* Backslashes and physical newlines are stored without decoding. */
+        // Zpětná lomítka i fyzické nové řádky ukládáme doslova, bez dekódování.
         if (ds_append(&buffer, (char)c) != 0) {
             return 99;
         }
@@ -1009,9 +1059,12 @@ static int read_multiline_string(Token *token) {
  */
 
 /**
- * @brief Distinguishes ordinary, empty, and triple-quoted string literals.
+ * @brief Rozliší běžný, prázdný a víceřádkový řetězec.
  *
- * The first opening quote has already been consumed by the caller.
+ * Volající již spotřeboval první otevírací uvozovku. Druhá uvozovka může ukončit prázdný
+ * řetězec, ale při třetí začne víceřádková forma.
+ * @param token Výstupní token řetězcového literálu.
+ * @return 0 při úspěchu, 1 pro neplatný řetězec, 99 při interním selhání.
  */
 static int read_string(Token *token) {
     int second = read_char();
@@ -1029,7 +1082,7 @@ static int read_string(Token *token) {
         return read_multiline_string(token);
     }
 
-    /* Two quotes form an empty ordinary string. */
+    // Dvojice uvozovek bez třetí otevírací uvozovky tvoří prázdný běžný řetězec.
     if (push_char(third) != 0)
         return 99;
 
@@ -1040,9 +1093,12 @@ static int read_string(Token *token) {
 }
 
 /**
- * @brief Recognizes the indivisible @main annotation.
+ * @brief Rozpozná nedělitelnou anotaci \@main.
  *
- * Rejects whitespace after @ and identifier continuations such as @mainName.
+ * Znak @ již načetl volající; za ním musí bez mezer následovat main. Další písmeno, číslice
+ * nebo podtržítko za celou anotací znamená chybu.
+ * @param token Výstupní token TOKEN_AT_MAIN.
+ * @return 0 při úspěchu, 1 pro neplatnou anotaci, 99 při selhání vrácení následujícího znaku.
  */
 static int read_at_main(Token *token) {
     static const char expected[] = "main";
@@ -1068,11 +1124,6 @@ static int read_at_main(Token *token) {
 }
 
 /**
- * @brief Recognizes the next token while handling layout and comments.
- *
- * @return 0 on success, 1 on lexical error, or 99 on internal failure.
- */
-/**
  * Začátek AI části
  * Použitý model: GPT-6.1 Sol
  * Rozsah: Vyčlenění původního čtení tokenů a doplnění sledování nových řádků.
@@ -1083,12 +1134,21 @@ static int read_at_main(Token *token) {
  * rozpoznávání tokenů od obsluhy veřejného rozhraní. Vysvětli také vlastnictví
  * paměti identifikátorů a řetězců.
  */
+/**
+ * @brief Rozpozná další token při obsluze komentářů a logických řádků.
+ *
+ * Před čtením vstupu vrací naplánované DEDENTy. Následně řeší počátek fyzického řádku a
+ * vybírá rozpoznávač podle načteného znaku.
+ * @param token Výstupní token; nesmí být NULL.
+ * @return 0 při úspěchu, 1 při lexikální chybě, 99 při neplatném rozhraní nebo interním selhání.
+ */
 static int scan_next(Token *token) {
     if ((source == NULL && memory_source == NULL) || token == NULL) {
         return 99;
     }
 
-    /* Deliver queued block endings before reading further input. */
+    // Naplánovaná ukončení bloků vracíme před dalším čtením vstupu.
+    // Při čekajících DEDENTech vstup neposouváme a nevytváříme další lexém.
     if (pending_dedents > 0) {
         --pending_dedents;
         token->type = TOKEN_DEDENT;
@@ -1111,7 +1171,7 @@ static int scan_next(Token *token) {
             return emit_eof(token);
         }
 
-        /* Horizontal whitespace between tokens has no syntactic meaning. */
+        // Vodorovné bílé znaky mezi lexémy přeskakujeme; prefix odsazení se řeší zvlášť.
         if (c == ' ' || c == '\t' || c == '\f' || c == '\v') {
             continue;
         }
@@ -1166,7 +1226,8 @@ static int scan_next(Token *token) {
             int next = read_char();
 
             if (is_digit(next)) {
-                /* A dot followed by a digit starts a Double such as .5. */
+                // Tečka následovaná číslicí zahajuje Double, například .5; jinak je samostatným
+                // tokenem.
                 if (push_char(next) != 0)
                     return 99;
 
@@ -1245,7 +1306,7 @@ static int scan_next(Token *token) {
                 continue;
             }
 
-            /* Neither comment form matched, so this is division. */
+            // Nebylo rozpoznáno otevření komentáře; lomítko tedy znamená dělení.
             if (push_char(next) != 0)
                 return 99;
 
@@ -1346,10 +1407,8 @@ static int scan_next(Token *token) {
             break;
 
         case ')':
-            /*
-             * Parenthesis matching is checked by the parser. Avoid underflow
-             * here even if the input contains an unmatched closing parenthesis.
-             */
+            /* Párování závorek kontroluje parser.
+             * Přebytečná zavírací závorka zde nesmí způsobit podtečení čítače. */
             if (paren_depth > 0)
                 --paren_depth;
 
@@ -1370,30 +1429,41 @@ static int scan_next(Token *token) {
  */
 
 /**
- * @brief Selects a caller-owned stream and resets the scanner.
+ * @brief Nastaví proudový vstup a resetuje stav scanneru.
+ * @param source_file Proud vlastněný volajícím; pro čtení musí být platný.
+ * @note Předchozí interní prostředky uvolní, ale proud nezavírá ani neuvolňuje dříve vrácené
+ * atributy.
  */
 void scanner_init(FILE *source_file) {
-    /* Internal allocations from a previous input must not be leaked. */
+    // Před změnou vstupu uvolníme předchozí interní alokace scanneru.
     scanner_free();
 
     source = source_file;
 }
 
-// AI ASSISTED START
-// AI PROMPT: Inicializuj scanner nad polem bajtu pro opakovane pruchody.
+// ZAČÁTEK ČÁSTI S ASISTENCÍ AI
+// Zadání AI: Inicializuj scanner nad polem bajtu pro opakovane pruchody.
+/**
+ * @brief Připraví scanner pro čtení z paměťového pole.
+ *
+ * Nejprve uvolní dosavadní interní stav a potom uloží ukazatel, délku a nulovou pozici.
+ * Opětovná inicializace nad stejným polem umožňuje více průchodů parseru bez rewind() a
+ * fmemopen().
+ * @param input Pole bajtů vlastněné volajícím; pro aktivní vstup nesmí být NULL.
+ * @param length Přesný počet čitelných bajtů; koncová nula není vyžadována.
+ * @note Pole se nekopíruje; musí zůstat platné po celou dobu čtení.
+ * @note Nevyžaduje nulový terminátor; konec vstupu určuje výhradně length.
+ */
 void scanner_init_buffer(const char *input, size_t length) {
     scanner_free();
-    memory_source   = (const unsigned char *)input;
-    memory_length   = length;
+    // Ukládáme jen vypůjčený ukazatel; délku a životnost původního pole zajišťuje volající.
+    memory_source = (const unsigned char *)input;
+    memory_length = length;
+    // Nové zpracování stejného paměťového vstupu začíná od jeho prvního bajtu.
     memory_position = 0;
 }
-// AI ASSISTED END
+// KONEC ČÁSTI S ASISTENCÍ AI
 
-/**
- * @brief Returns one token and records skipped physical line breaks.
- *
- * @return 0 on success, 1 on lexical error, or 99 on internal/API/I/O failure.
- */
 /**
  * Začátek AI části
  * Použitý model: GPT-6.1 Sol
@@ -1405,14 +1475,24 @@ void scanner_init_buffer(const char *input, size_t length) {
  * rozpoznávání tokenů od obsluhy veřejného rozhraní. Vysvětli také vlastnictví
  * paměti identifikátorů a řetězců.
  */
+/**
+ * @brief Vrátí jeden token a přiřadí informaci o přeskočeném LF.
+ *
+ * Při prvním volání zajistí základní úroveň zásobníku odsazení. Po rozpoznání tokenu ověří
+ * chyby proudového vstupu a pro skutečný lexém předá příznak newline_before.
+ * @param token Platné místo pro výstupní token.
+ * @return 0 při úspěchu, 1 při lexikální chybě, 99 při chybě API, alokace nebo čtení.
+ * @note Atributy jsou platné pouze při úspěšném návratu; předchozí atributy volající uvolňuje sám.
+ */
 int get_next_token(Token *token) {
     if ((source == NULL && memory_source == NULL) || token == NULL) {
         return 99;
     }
 
+    // Příznak předchozího LF vyplníme jen pro úspěšně rozpoznaný skutečný lexém.
     token->newline_before = false;
 
-    /* Lazy allocation allows allocation failures to use the usual error code. */
+    // Odložená alokace umožní hlásit nedostatek paměti běžným návratovým kódem 99.
     if (indent_stack == NULL) {
         if (reserve_indents(1) != 0) {
             return 99;
@@ -1423,7 +1503,8 @@ int get_next_token(Token *token) {
 
     int rc = scan_next(token);
 
-    /* A failed stream read must not be mistaken for a normal EOF. */
+    // Chybu fgetc() nesmíme zaměnit s řádným koncem vstupu.
+    // EOF způsobené chybou čtení nesmí být vydáváno za řádný konec programu.
     if (source != NULL && ferror(source)) {
         if (rc == 0 && (token->type == TOKEN_IDENTIFIER || token->type == TOKEN_STRING_LITERAL)) {
             token_destroy(token);
@@ -1432,10 +1513,8 @@ int get_next_token(Token *token) {
         return 99;
     }
 
-    /*
-     * Layout tokens do not consume the line-break information.
-     * Preserve it until the next actual source lexeme is returned.
-     */
+    /* Layoutové tokeny ani EOF nespotřebovávají informaci o přeskočeném LF.
+     * Příznak zachováme až pro příští skutečný lexém zdrojového programu. */
     if (rc == 0 && token->type != TOKEN_EOL && token->type != TOKEN_INDENT &&
         token->type != TOKEN_DEDENT && token->type != TOKEN_EOF) {
         token->newline_before = skipped_newline;
@@ -1449,9 +1528,11 @@ int get_next_token(Token *token) {
  */
 
 /**
- * @brief Frees internal buffers and resets all scanner state.
+ * @brief Uvolní interní prostředky a obnoví výchozí stav scanneru.
  *
- * Previously returned token attributes remain owned by the caller.
+ * Zruší pracovní buffer a zásobník odsazení a resetuje pozice, čítače i příznaky vstupu.
+ * Dříve vrácené textové atributy zůstávají ve vlastnictví volajícího.
+ * @note Nevlastní a neuvolňuje paměťový vstup ani nezavírá proud; opakované volání je bezpečné.
  */
 void scanner_free(void) {
     dynamic_buffer_free(&buffer);

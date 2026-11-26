@@ -1,30 +1,21 @@
 /**
- *@author Denis Doubrava xdoubrd01
- * Použitý model: GPT-6.1 Sol
- * Tvorba komentářů byla za pomoci umělé inteligence: překlad, formátování a lepší formulace vět
- */
-
-/**
+ * @project Implementace překladače imperativního jazyka IFJ26
  * @file scanner.h
- * @brief Token types and a stateful scanner interface for base IFJ26.
- *
- * The caller owns the input stream and all successfully returned identifier
- * and string attributes. Only one scanner instance is active at a time.
+ * @author Denis Doubrava (xdoubrd01)
+ * @brief Definice tokenů a rozhraní scanneru pro proudový a paměťový vstup.
+ * Definuje výčet TokenType a strukturu Token s atributem závislým na typu
+ * tokenu. Deklaruje inicializaci vstupu, získání dalšího tokenu a uvolnění
+ * interních prostředků scanneru.
+ * @note AI byla využita k lepšímu znění a obsahu komentářů.
  */
 
 #ifndef SCANNER_H
 #define SCANNER_H
 
+// Scanner vrací vždy jeden token; textové atributy po předání vlastní volající.
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
-
-/**
- * @brief Tokens recognized by this scanner.
- *
- * @note Unit literals are represented by LPAREN followed by RPAREN.
- * @note Physical line breaks inside parentheses do not produce EOL tokens.
- */
 
 /**
  * Začátek AI části
@@ -34,118 +25,130 @@
  */
 
 typedef enum {
-    TOKEN_EOF, // End of input
-    TOKEN_EOL, // End of a nonempty logical line
+    TOKEN_EOF, ///< Konec vstupu po vrácení zbývajících značek DEDENT.
+    TOKEN_EOL, ///< Konec neprázdného logického řádku mimo kulaté závorky.
 
-    // Identifiers and literals
-    TOKEN_IDENTIFIER,
-    TOKEN_INT_LITERAL,
-    TOKEN_DOUBLE_LITERAL,
-    TOKEN_STRING_LITERAL,
+    // Identifikátory a literály.
+    TOKEN_IDENTIFIER, ///< Jméno, které není rozpoznaným klíčovým slovem ani názvem typu; atribut
+                      ///< s_val.
+    TOKEN_INT_LITERAL,    ///< Celočíselný literál s atributem i_val.
+    TOKEN_DOUBLE_LITERAL, ///< Desetinný literál s atributem d_val.
+    TOKEN_STRING_LITERAL, ///< Řetězcový literál s vlastněným atributem s_val.
 
-    // Base-language keywords
-    TOKEN_KW_DEF,
-    TOKEN_KW_DO,
-    TOKEN_KW_ELSE,
-    TOKEN_KW_IF,
-    TOKEN_KW_RETURN,
-    TOKEN_KW_THEN,
-    TOKEN_KW_VAL,
-    TOKEN_KW_VAR,
-    TOKEN_KW_WHILE,
-    TOKEN_KW_IMPORT,
+    // Klíčová slova základního jazyka.
+    TOKEN_KW_DEF,    ///< Klíčové slovo def pro definici funkce.
+    TOKEN_KW_DO,     ///< Klíčové slovo do uvádějící tělo cyklu.
+    TOKEN_KW_ELSE,   ///< Klíčové slovo else uvádějící alternativní větev.
+    TOKEN_KW_IF,     ///< Klíčové slovo if pro podmíněný příkaz.
+    TOKEN_KW_RETURN, ///< Klíčové slovo return pro návrat z funkce.
+    TOKEN_KW_THEN,   ///< Klíčové slovo then uvádějící větev podmínky.
+    TOKEN_KW_VAL,    ///< Klíčové slovo val pro neměnitelnou lokální hodnotu.
+    TOKEN_KW_VAR,    ///< Klíčové slovo var pro měnitelnou proměnnou.
+    TOKEN_KW_WHILE,  ///< Klíčové slovo while pro cyklus.
+    TOKEN_KW_IMPORT, ///< Klíčové slovo import.
 
-    // Base-language data types
-    TOKEN_TYPE_INT,
-    TOKEN_TYPE_DOUBLE,
-    TOKEN_TYPE_STRING,
-    TOKEN_TYPE_UNIT,
+    // Datové typy základního jazyka.
+    TOKEN_TYPE_INT,    ///< Název typu Int.
+    TOKEN_TYPE_DOUBLE, ///< Název typu Double.
+    TOKEN_TYPE_STRING, ///< Název typu String.
+    TOKEN_TYPE_UNIT,   ///< Název typu Unit.
 
-    // Operators and separators
-    TOKEN_ASSIGN, // =
-    TOKEN_PLUS,   // +
-    TOKEN_MINUS,  // -
-    TOKEN_MUL,    // *
-    TOKEN_DIV,    // /
-    TOKEN_EQ,     // ==
-    TOKEN_NEQ,    // !=
-    TOKEN_LT,     // <
-    TOKEN_LEQ,    // <=
-    TOKEN_GT,     // >
-    TOKEN_GEQ,    // >=
-    TOKEN_LPAREN, // (
-    TOKEN_RPAREN, // )
-    TOKEN_COLON,  // :
-    TOKEN_COMMA,  // ,
+    // Operátory a oddělovače.
+    TOKEN_ASSIGN, ///< Přiřazení nebo oddělovač definice (=).
+    TOKEN_PLUS,   ///< Sčítání nebo unární plus (+).
+    TOKEN_MINUS,  ///< Odčítání nebo unární minus (-).
+    TOKEN_MUL,    ///< Násobení (*).
+    TOKEN_DIV,    ///< Dělení (/); začátky komentářů se zpracují zvlášť.
+    TOKEN_EQ,     ///< Porovnání rovnosti (==).
+    TOKEN_NEQ,    ///< Porovnání nerovnosti (!=).
+    TOKEN_LT,     ///< Porovnání menší než (<).
+    TOKEN_LEQ,    ///< Porovnání menší nebo rovno (<=).
+    TOKEN_GT,     ///< Porovnání větší než (>).
+    TOKEN_GEQ,    ///< Porovnání větší nebo rovno (>=).
+    TOKEN_LPAREN, ///< Otevírací kulatá závorka; zvyšuje paren_depth.
+    TOKEN_RPAREN, ///< Zavírací kulatá závorka; párování ověřuje parser.
+    TOKEN_COLON,  ///< Dvojtečka před typovou anotací (:).
+    TOKEN_COMMA,  ///< Oddělovač parametrů nebo argumentů (,).
 
-    // Additional punctuation and the entry-point annotation
-    TOKEN_DOT,       // .
-    TOKEN_SEMICOLON, // ;
-    TOKEN_AT_MAIN,   // @main
+    // Další interpunkce a anotace vstupní funkce.
+    TOKEN_DOT, ///< Samostatná tečka nebo členský přístup; . s následující číslicí patří číslu.
+    TOKEN_SEMICOLON, ///< Středník jako oddělovač příkazů (;).
+    TOKEN_AT_MAIN,   ///< Nedělitelná anotace \@main.
 
-    // Block boundaries derived from indentation
-    TOKEN_INDENT,
-    TOKEN_DEDENT
+    // Hranice bloků odvozené z odsazení.
+    TOKEN_INDENT, ///< Zahájení nové úrovně blokového odsazení.
+    TOKEN_DEDENT  ///< Ukončení jedné úrovně blokového odsazení.
 } TokenType;
 
 /**
- * @brief Token and its type-dependent attribute.
+ * @brief Token a jeho atribut závislý na typu.
  *
- * @note Read i_val only for TOKEN_INT_LITERAL.
- * @note Read d_val only for TOKEN_DOUBLE_LITERAL.
- * @note TOKEN_IDENTIFIER and TOKEN_STRING_LITERAL own an allocated s_val.
- *       The caller must free it before discarding or overwriting the token.
- * @note Other token types have no defined attribute.
+ * Číselné literály ukládají hodnotu přímo do unie. Identifikátor a řetězcový literál
+ * obsahují vlastněnou kopii textu, kterou musí volající uvolnit před přepsáním nebo
+ * zahozením tokenu.
+ * @note i_val čtěte jen pro TOKEN_INT_LITERAL a d_val jen pro TOKEN_DOUBLE_LITERAL.
+ * @note s_val je platné pro TOKEN_IDENTIFIER a TOKEN_STRING_LITERAL; ostatní typy atribut nemají
+ * definován.
  */
 typedef struct {
-    TokenType type;
+    TokenType type; ///< Typ tokenu určující význam atributu.
 
     /**
-     * True if skipped whitespace or comments before this lexeme contained LF.
+     * @brief Označuje LF přeskočené před tímto lexémem.
      *
-     * Layout tokens and EOF always use false. Newlines inside a string literal
-     * do not set this flag. The parser uses it to validate a trailing comma.
+     * Layoutové tokeny a EOF mají hodnotu false a příznak nespotřebují. Nový řádek uvnitř
+     * řetězcového literálu jej nenastavuje. Parser jej používá například při kontrole koncové
+     * čárky.
      */
     bool newline_before;
 
     union {
-        int    i_val;
-        double d_val;
-        char  *s_val;
+        int    i_val; ///< Hodnota pro TOKEN_INT_LITERAL.
+        double d_val; ///< Hodnota pro TOKEN_DOUBLE_LITERAL.
+        char  *s_val; ///< Vlastněný text pro identifikátor nebo řetězcový literál.
     } attribute;
 } Token;
 
 /**
- * @brief Resets scanner state for a new input stream.
- *
- * @param source_file Caller-owned stream from which tokens will be read.
- *
- * @note Reinitialization also releases previous internal scanner storage.
- * @note Does not close the input stream or free previously returned attributes.
+ * @brief Inicializuje scanner nad vstupním proudem.
+ * @param source_file Platný proud vlastněný volajícím.
+ * @note Uvolní předchozí interní stav, ale nezavírá proud ani neuvolňuje dříve vrácené textové
+ * atributy.
  */
 void scanner_init(FILE *source_file);
 
+/**
+ * @brief Připraví scanner pro čtení z paměťového pole.
+ *
+ * Nejprve uvolní dosavadní interní stav a potom uloží ukazatel, délku a nulovou pozici.
+ * Opětovná inicializace nad stejným polem umožňuje více průchodů parseru bez rewind() a
+ * fmemopen().
+ * @param input Pole bajtů vlastněné volajícím; pro aktivní vstup nesmí být NULL.
+ * @param length Přesný počet čitelných bajtů; koncová nula není vyžadována.
+ * @note Pole se nekopíruje; musí zůstat platné po celou dobu čtení.
+ * @note Nevyžaduje nulový terminátor; konec vstupu určuje výhradně length.
+ */
 void scanner_init_buffer(const char *input, size_t length);
 
 /**
- * @brief Reads the next token, including indentation markers when needed.
+ * @brief Načte další token včetně značek logických řádků a odsazení.
  *
- * @param token Destination for the next token; must not be NULL.
- * @return 0 on success, 1 on lexical error, or 99 on internal/API/I/O failure.
- *
- * @note Call scanner_init() with a valid stream before requesting tokens.
- * @note After an error, call scanner_free() or scanner_init() before continuing.
- * @note Attributes are valid only on success.
- * @note Previous token attributes are not automatically freed.
+ * Před voláním nastavte vstup pomocí scanner_init() nebo scanner_init_buffer(). Vrácené
+ * textové atributy vlastní volající a musí je uvolnit před přepsáním tokenu.
+ * @param token Platný výstupní ukazatel; nesmí být NULL.
+ * @return 0 při úspěchu, 1 při lexikální chybě, 99 při interní chybě, neplatném API nebo chybě
+ * vstupního proudu.
+ * @note Atributy používejte pouze po úspěšném návratu.
+ * @note Po chybě scanner uvolněte nebo znovu inicializujte, než budete pokračovat.
  */
 int get_next_token(Token *token);
 
 /**
- * @brief Releases the scanner's lexeme buffer and indentation stack.
+ * @brief Uvolní pracovní buffer, zásobník odsazení a resetuje scanner.
  *
- * @note Does not free returned token attributes or close the input stream.
- * @note May be called after successful scanning or after an error.
- * @note Repeated calls are safe.
+ * Ruší pouze interní prostředky scanneru. Proud, paměťový vstup i dříve vrácené textové
+ * atributy nadále spravuje volající.
+ * @note Lze volat po úspěchu i po chybě; opakované volání je bezpečné.
  */
 void scanner_free(void);
 
