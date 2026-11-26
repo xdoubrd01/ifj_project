@@ -1,6 +1,9 @@
-// Project:    IFJ26
-// Filename:   code_label_counter.c
-// Author:     Michal Zednicek <xzednim00>
+/**
+ * @par         Implementace překladače imperativního jazyka IFJ26
+ * @file        code_label_counter.c
+ * @authors     Michal Zednicek <xzednim00>
+ * @brief       Implementace počítadla návěští
+ */
 
 #include "code_label_counter.h"
 

@@ -1,3 +1,10 @@
+/**
+ * @par         Implementace překladače imperativního jazyka IFJ26
+ * @file        code_buffer.c
+ * @authors     Michal Zednicek <xzednim00>
+ * @brief       Implementace vyrovnávací paměti výstupného kódu
+ */
+
 // Prompt:
 // napis kod pre bufferovanie generovaneho kodu pomocou prekladaca.
 // ide o jeden buffer a pomocne funkcie pre pracu s nim.
@@ -14,7 +21,7 @@ bool buffer_init(CodeBuffer *buf) {
 
     buf->data = (char *)malloc(BUFFER_INIT_CAPACITY * sizeof(char));
     if (buf->data == NULL) {
-        return false; // Chyba alokácie
+        return false; // Chyba alokace
     }
 
     buf->data[0]  = '\0';
@@ -23,13 +30,13 @@ bool buffer_init(CodeBuffer *buf) {
     return true;
 }
 
-// Pomocná funkcia na zväčšenie buffera, ak je to potrebné
+// Pomocná funkce pro zvětšení bufferu, pokud je to potřeba
 static bool buffer_expand(CodeBuffer *buf, size_t required_length) {
     if (required_length < buf->capacity) {
-        return true; // Kapacita je dostatočná
+        return true; // Kapacita je dostatečná
     }
 
-    // Zdvojnásobujeme kapacitu, kým nie je dostatočne veľká
+    // Zdvojnásobujeme kapacitu, dokud není dostatečně velká
     size_t new_capacity = buf->capacity * 2;
     while (new_capacity <= required_length) {
         new_capacity *= 2;
@@ -37,7 +44,7 @@ static bool buffer_expand(CodeBuffer *buf, size_t required_length) {
 
     char *new_data = (char *)realloc(buf->data, new_capacity * sizeof(char));
     if (new_data == NULL) {
-        return false; // Chyba realokácie
+        return false; // Chyba realokace
     }
 
     buf->data     = new_data;
@@ -69,7 +76,7 @@ bool buffer_append_string(CodeBuffer *buf, const char *str) {
         return false;
     }
 
-    // Skopírujeme reťazec na koniec buffera
+    // Zkopírujeme řetězec na konec bufferu
     memcpy(buf->data + buf->length, str, str_len + 1); // +1 pre '\0'
     buf->length += str_len;
 
@@ -83,7 +90,7 @@ bool buffer_append_format(CodeBuffer *buf, const char *format, ...) {
     va_list args;
     va_start(args, format);
 
-    // Zistíme potrebnú dĺžku pre formátovaný reťazec
+    // Zjistíme potřebnou délku pro formátovaný řetězec
     va_list args_copy;
     va_copy(args_copy, args);
     int required_len = vsnprintf(NULL, 0, format, args_copy);
@@ -91,7 +98,7 @@ bool buffer_append_format(CodeBuffer *buf, const char *format, ...) {
 
     if (required_len < 0) {
         va_end(args);
-        return false; // Chyba formátovania
+        return false; // Chyba formátování
     }
 
     if (!buffer_expand(buf, buf->length + required_len)) {
@@ -99,7 +106,7 @@ bool buffer_append_format(CodeBuffer *buf, const char *format, ...) {
         return false;
     }
 
-    // Zapíšeme formátovaný reťazec do buffera
+    // Zapíšeme formátovaný řetězec do bufferu
     vsnprintf(buf->data + buf->length, required_len + 1, format, args);
     buf->length += required_len;
 

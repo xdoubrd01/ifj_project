@@ -1,6 +1,9 @@
-// Project:    IFJ26
-// Filename:   code_generator.c
-// Author:     Michal Zednicek <xzednim00>
+/**
+ * @par         Implementace překladače imperativního jazyka IFJ26
+ * @file        code_generator.c
+ * @authors     Michal Zednicek <xzednim00>
+ * @brief       Implementace funkcí generátora kódu
+ */
 
 #include "code_generator.h"
 #include "code_buffer.h"
@@ -22,7 +25,7 @@ static size_t    valmem_label;
 static char     *current_func_name     = NULL;
 static data_type current_func_ret_type = type_unknown;
 
-// -----    functions to generate IFJ26code instructions    -----
+// -----    funkce pro formátování výstupu      -----
 
 // prompt:
 // write functions in c to generate instructions on stdout.
@@ -52,7 +55,7 @@ void gen_inst4(const char *inst, const char *arg1, const char *arg2, const char 
 }
 // AI END
 
-// -----    constant data formatting functions      -----
+// -----    funkce pro formátování konstantních dat     -----
 
 // prompt:
 // write fuknction to convert C float to this format:
@@ -89,7 +92,7 @@ void print_string(const char *str) {
     buffer_append_string(&code_buff, "\n");
 }
 
-// -----   built-in functions       -----
+// -----   vestavěné funkce     -----
 // AI-ASSISTED START
 void gen_builtin_print(void) {
     gen_inst1("LABEL", "$print");
@@ -261,7 +264,7 @@ void gen_builtin_substr(void) {
     gen_inst1("DEFVAR", "LF@%res");
     gen_inst1("DEFVAR", "LF@%char");
 
-    // argumenty vlozene v poradi: str, start, end
+    // argumenty vložené v pořadí: str, start, end
     gen_inst1("POPS", "LF@%end");
     gen_inst1("POPS", "LF@%start");
     gen_inst1("POPS", "LF@%str");
@@ -313,7 +316,7 @@ void gen_builtin_substr(void) {
 // strLength, chr, readLine, toInt. pouzi instrukcnu sadu jazyka ifj26code.
 // navratovu hodnotu vracaj pomocou datoveho zasobniku
 // AI START
-// Definícia vstavanej funkcie strLength(value: String): Int
+// Definice vestavěné funkce strLength(value: String): Int
 void gen_builtin_strLength(void) {
     gen_inst1("LABEL", "$strLength");
     gen_inst0("CREATEFRAME");
@@ -428,7 +431,31 @@ void code_gen_init(char *main_name) {
     buffer_flush(&code_buff);
 }
 
-// -----    function generation     -----
+// -----    funkce ošetřující VALMEM    -----
+
+// Pro binary64 nemají hodnoty s absolutní hodnotou ≥ 2^52 žádné desetinné bity.
+// Vyhněte se tam přetečení FLOAT2INT; jinak opravte oříznutí směrem k −nekonečnu.
+static void gen_valmem_floor(void) {
+    if (valmem_label == SIZE_MAX)
+        exit(99);
+    char end[80];
+    snprintf(end, sizeof(end), "$valmem$floor$%zu$end", valmem_label++);
+    gen_inst1("POPS", "GF@%tmp_op1");
+    gen_inst2("MOVE", "GF@%tmp_res", "GF@%tmp_op1");
+    gen_inst3("LT", "GF@%tmp_op2", "GF@%tmp_op1", "float@0x1p+52");
+    gen_inst3("JUMPIFEQ", end, "GF@%tmp_op2", "bool@false");
+    gen_inst3("GT", "GF@%tmp_op2", "GF@%tmp_op1", "float@-0x1p+52");
+    gen_inst3("JUMPIFEQ", end, "GF@%tmp_op2", "bool@false");
+    gen_inst2("FLOAT2INT", "GF@%tmp_op2", "GF@%tmp_op1");
+    gen_inst2("INT2FLOAT", "GF@%tmp_res", "GF@%tmp_op2");
+    gen_inst3("GT", "GF@%tmp_op2", "GF@%tmp_res", "GF@%tmp_op1");
+    gen_inst3("JUMPIFEQ", end, "GF@%tmp_op2", "bool@false");
+    gen_inst3("SUB", "GF@%tmp_res", "GF@%tmp_res", "float@0x1p+0");
+    gen_inst1("LABEL", end);
+    gen_inst1("PUSHS", "GF@%tmp_res");
+}
+
+// -----    generování funkcí       -----
 
 void gen_funct_call(char *func_name) { buffer_append_format(&code_buff, "CALL $%s\n", func_name); }
 
@@ -475,9 +502,7 @@ void gen_func_return(ExprNode *ret_expr) {
     buffer_append_format(&code_buff, "JUMP $%s$end\n", current_func_name);
 }
 
-// TODO: pridat osetrenie pre 'return func()'
-// mozne riesenie vraciat hodnotu na vrchu zasobniku -> vyraz z volanej funkcie pomocou return bude
-// automaticky na vrchu -> podporovane rozsirenie FUNEX
+
 void gen_func_end(void) {
     buffer_append_format(&code_buff, "LABEL $%s$end\n", current_func_name);
 
@@ -493,7 +518,7 @@ void gen_func_end(void) {
 }
 // AI-ASSISTED END
 
-// -----    IF/ELSE/WHILE ...               -----
+// -----    IF/ELSE         -----
 
 // AI-ASSISTED START
 void gen_if_start(ExprNode *expr) {
@@ -518,7 +543,7 @@ void gen_if_end(void) {
 }
 // AI-ASSISTED END
 
-// -----    WHILE LOOP                      -----
+// -----    WHILE cyklus        -----
 
 void gen_while_start(ExprNode *expr) {
     size_t current_id = label_push(&while_counter);
@@ -537,29 +562,7 @@ void gen_while_end(void) {
     buffer_append_format(&code_buff, "LABEL $while_end_%d\n", current_id);
 }
 
-// -----    expr_tree process functions     -----
-
-/* For binary64, magnitudes >= 2^52 have no fractional bits. Avoid an
- * overflowing FLOAT2INT there; otherwise correct truncation toward -infinity. */
-static void gen_valmem_floor(void) {
-    if (valmem_label == SIZE_MAX)
-        exit(99);
-    char end[80];
-    snprintf(end, sizeof(end), "$valmem$floor$%zu$end", valmem_label++);
-    gen_inst1("POPS", "GF@%tmp_op1");
-    gen_inst2("MOVE", "GF@%tmp_res", "GF@%tmp_op1");
-    gen_inst3("LT", "GF@%tmp_op2", "GF@%tmp_op1", "float@0x1p+52");
-    gen_inst3("JUMPIFEQ", end, "GF@%tmp_op2", "bool@false");
-    gen_inst3("GT", "GF@%tmp_op2", "GF@%tmp_op1", "float@-0x1p+52");
-    gen_inst3("JUMPIFEQ", end, "GF@%tmp_op2", "bool@false");
-    gen_inst2("FLOAT2INT", "GF@%tmp_op2", "GF@%tmp_op1");
-    gen_inst2("INT2FLOAT", "GF@%tmp_res", "GF@%tmp_op2");
-    gen_inst3("GT", "GF@%tmp_op2", "GF@%tmp_res", "GF@%tmp_op1");
-    gen_inst3("JUMPIFEQ", end, "GF@%tmp_op2", "bool@false");
-    gen_inst3("SUB", "GF@%tmp_res", "GF@%tmp_res", "float@0x1p+0");
-    gen_inst1("LABEL", end);
-    gen_inst1("PUSHS", "GF@%tmp_res");
-}
+// -----    funkce pro průchod stromem výrazu     -----
 
 void process_expr_node(ExprNode *node) {
     if (node->kind == EXPR_BINARY) {
@@ -572,9 +575,6 @@ void process_expr_node(ExprNode *node) {
             process_expr_node(right);
         }
 
-        // prompt:
-        // Complete logic for EXPR_BINARY
-        // AI START
         switch (node->u.bin.op) {
         case OP_ADD:
             gen_inst0("ADDS");
@@ -613,20 +613,17 @@ void process_expr_node(ExprNode *node) {
             gen_inst0("NOTS");
             break;
         case OP_CONCAT:
-            // IFJcode26 does not provide a CONCATS instruction.
-            // We must pop the operands into temporary variables (e.g., in GF),
-            // perform CONCAT, and push the result back.
-            // (Make sure to define GF@%tmp_op1, GF@%tmp_op2, GF@%tmp_res during program
-            // initialization)
+            // IFJcode26 neposkytuje zásobnikovou instrukci CONCATS.
+            // Musíme vložit operandy do dočasných proměnných
             buffer_append_string(&code_buff, "POPS GF@%tmp_op2\n");
             buffer_append_string(&code_buff, "POPS GF@%tmp_op1\n");
             buffer_append_string(&code_buff, "CONCAT GF@%tmp_res GF@%tmp_op1 GF@%tmp_op2\n");
             buffer_append_string(&code_buff, "PUSHS GF@%tmp_res\n");
             break;
         }
-        // AI END
     }
 
+    // zpracování přidaných tokenú pro podporu VALMEM
     switch (node->kind) {
     case EXPR_MEMBER:
         process_expr_node(node->u.member.receiver);
@@ -645,6 +642,7 @@ void process_expr_node(ExprNode *node) {
             break;
         }
         break;
+
     case EXPR_CALL:
         for (size_t i = 0; i < node->u.call.argc; i++) {
             process_expr_node(node->u.call.args[i]);
@@ -685,7 +683,6 @@ void process_expr_node(ExprNode *node) {
         }
         gen_inst0("MULS");
         break;
-        // analyse node.u.type, proccess negation of data type (if int -> reverse operand, bool...)
 
     case EXPR_INT2FLOAT:
         process_expr_node(node->u.operand);
@@ -697,23 +694,23 @@ void process_expr_node(ExprNode *node) {
     }
 }
 
-// -----    variable related functions      -----
+// -----    definice a přiřazování hodnot proměnným     -----
 
 // AI ASSISTED START
 void gen_var_assign(SymTable *ts, char *var_name, data_type var_type, ExprNode *node) {
     symbol_data *var_data = symtable_search_var(ts, var_name);
     unsigned     var_id   = var_data->data.var.id;
 
-    if (node) { // opravil jsem obracenou podminku, node se zavola kdyz vyrazovy strom existuje
+    if (node) {
         process_expr_node(node);
 
-        // Implicitná konverzia Int -> Double na vrchole dátového zásobníka
+        // Implicitní konverze Int -> Double na vrcholu datového zásobníku
         if (var_type == type_double && node->type == type_int) {
             gen_inst0("INT2FLOATS");
         }
     }
 
-    // Uloženie výsledku zo zásobníka do premennej v LF (bez DEFVAR)
+    // Uložení výsledku ze zásobníku do proměnné v LF (bez DEFVAR)
     buffer_append_format(&code_buff, "POPS LF@v%u\n", var_id);
 }
 
@@ -723,6 +720,7 @@ void gen_def_var(SymTable *ts, char *var_name, data_type var_type, ExprNode *nod
 
     printf("DEFVAR LF@v%u\n", var_id);
 
+    // je-li definován výraz, přiřad hodnotu
     if (node != NULL) {
         gen_var_assign(ts, var_name, var_type, node);
     }

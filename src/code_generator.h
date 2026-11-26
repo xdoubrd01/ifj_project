@@ -1,3 +1,10 @@
+/**
+ * @par         Implementace překladače imperativního jazyka IFJ26
+ * @file        code_generator.h
+ * @authors     Michal Zednicek <xzednim00>
+ * @brief       Implementace funkcí generátora kódu
+ */
+
 #ifndef CODE_GENERATOR_H
 #define CODE_GENERATOR_H
 
@@ -5,7 +12,7 @@
 #include "symtable.h"
 #include <stdbool.h>
 
-// Vypis jednotlivych instrukci IFJcode26
+// Výpis jednotlivých instrukcí IFJcode26
 void gen_inst0(const char *inst);
 void gen_inst1(const char *inst, const char *arg1);
 void gen_inst2(const char *inst, const char *arg1, const char *arg2);
@@ -20,7 +27,7 @@ void print_nil(void);
 void print_int(const int val);
 void print_string(const char *str);
 
-// Vestavene funkce
+// Vestavěné funkce
 void gen_builtin_print(void);
 void gen_builtin_read_int(void);
 void gen_builtin_read_double(void);
@@ -32,23 +39,23 @@ void gen_builtin_chr(void);
 void gen_builtin_readLine(void);
 void gen_builtin_toInt(void);
 
-// Inicializace generatoru
+// Inicializace generátoru
 void code_gen_init(char *main_name);
 
-// Volani a definice funkci
+// Volání a definice funkcí
 void gen_funct_call(char *func_name);
 void gen_func_start(SymTable *table, char *func_name, data_type ret_type);
 void gen_func_return(ExprNode *ret_expr);
 void gen_func_end(void);
 
-// Podminky a cykly
+// Podmínky a cykly
 void gen_if_start(ExprNode *expr);
 void gen_if_else(void);
 void gen_if_end(void);
 void gen_while_start(ExprNode *expr);
 void gen_while_end(void);
 
-// Vyrazy a promenne
+// Výrazy a proměnné
 void process_expr_node(ExprNode *node);
 void gen_var_assign(SymTable *ts, char *var_name, data_type var_type, ExprNode *node);
 void gen_def_var(SymTable *ts, char *var_name, data_type var_type, ExprNode *node);
