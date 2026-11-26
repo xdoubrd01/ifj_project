@@ -1,5 +1,5 @@
 /**
- * @par         IFJ26
+ * @par         Implementace překladače imperativního jazyka IFJ26
  * @file        code_buffer.h
  * @authors     Michal Zednicek <xzednim00>
  * @brief       Implementace vyrovnávací paměti výstupného kódu
@@ -11,7 +11,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-// Počiatočná veľkosť buffera
+// Počáteční velikost bufferu
 #define BUFFER_INIT_CAPACITY 512
 
 typedef struct {
@@ -23,22 +23,22 @@ typedef struct {
 // Inicializuje buffer
 bool buffer_init(CodeBuffer *buf);
 
-// Pridá jeden znak do buffera
+// Přidá jeden znak do bufferu
 bool buffer_append_char(CodeBuffer *buf, char c);
 
-// Pridá reťazec do buffera
+// Přidá řetězec do bufferu
 bool buffer_append_string(CodeBuffer *buf, const char *str);
 
-// Pridá formátovaný reťazec (podobne ako printf), veľmi užitočné pre inštrukcie
+// Přidá formátovaný řetězec (podobně jako printf), velmi užitečné pro instrukce
 bool buffer_append_format(CodeBuffer *buf, const char *format, ...);
 
-// Uvoľní pamäť buffera
+// Uvolní paměť bufferu
 void buffer_free(CodeBuffer *buf);
 
-// Vymaže obsah buffera bez uvoľnenia alokovanej pamäte (pre opätovné použitie)
+// Vymaže obsah bufferu bez uvolnění alokované paměti (pro opětovné použití)
 void buffer_clear(CodeBuffer *buf);
 
-// Vypíše obsah buffera na stdout a hneď ho vymaže
+// Vypíše obsah bufferu na stdout a hned ho vymaže
 void buffer_flush(CodeBuffer *buf);
 
 #endif // CODE_BUFFER_H
