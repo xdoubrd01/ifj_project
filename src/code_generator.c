@@ -1,6 +1,9 @@
-// Project:    IFJ26
-// Filename:   code_generator.c
-// Author:     Michal Zednicek <xzednim00>
+/**
+ * @par         IFJ26
+ * @file        code_generator.c
+ * @authors     Michal Zednicek <xzednim00>
+ * @brief       Implementace funkcí generátora kódu
+ */
 
 #include "code_generator.h"
 #include "code_buffer.h"

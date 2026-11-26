@@ -1,3 +1,10 @@
+/**
+ * @par         IFJ26
+ * @file        code_generator.h
+ * @authors     Michal Zednicek <xzednim00>
+ * @brief       Implementace funkcí generátora kódu
+ */
+
 #ifndef CODE_GENERATOR_H
 #define CODE_GENERATOR_H
 

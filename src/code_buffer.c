@@ -1,3 +1,10 @@
+/**
+ * @par         IFJ26
+ * @file        code_buffer.c
+ * @authors     Michal Zednicek <xzednim00>
+ * @brief       Implementace vyrovnávací paměti výstupného kódu
+ */
+
 // Prompt:
 // napis kod pre bufferovanie generovaneho kodu pomocou prekladaca.
 // ide o jeden buffer a pomocne funkcie pre pracu s nim.

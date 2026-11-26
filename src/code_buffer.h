@@ -1,3 +1,10 @@
+/**
+ * @par         IFJ26
+ * @file        code_buffer.h
+ * @authors     Michal Zednicek <xzednim00>
+ * @brief       Implementace vyrovnávací paměti výstupného kódu
+ */
+
 #ifndef CODE_BUFFER_H
 #define CODE_BUFFER_H
 
