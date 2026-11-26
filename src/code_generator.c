@@ -387,7 +387,7 @@ void gen_builtin_toInt(void) {
 }
 // AI END
 
-// -----   IFJ26code header generation      -----
+// -----   generování hlavičky IFJ26code      -----
 
 void code_gen_init(char *main_name) {
     valmem_label = 0;
