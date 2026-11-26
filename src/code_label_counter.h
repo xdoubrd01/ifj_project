@@ -1,5 +1,5 @@
 /**
- * @par         IFJ26
+ * @par         Implementace překladače imperativního jazyka IFJ26
  * @file        code_label_counter.h
  * @authors     Michal Zednicek <xzednim00>
  * @brief       Implementace počítadla návěští
@@ -12,26 +12,23 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+/**
+ * @brief Struktura pro správu a generování unikátních návěští při zanořených konstrukcích (např. if, while).
+ */
 typedef struct {
-    size_t  cnt;       // Total number of generated labels
-    size_t *stack;     // Dynamic array storing active nested label IDs
-    size_t  stack_top; // Current number of items on the stack
-    size_t  capacity;  // Allocated capacity of the stack array
+    size_t  cnt;       /**< Celkový počet dosud vygenerovaných návěští. */
+    size_t *stack;     /**< Dynamické pole uchovávající ID aktuálně aktivních vnořených návěští. */
+    size_t  stack_top; /**< Aktuální počet prvků na zásobníku. */
+    size_t  capacity;  /**< Alokovaná kapacita pole zásobníku. */
 } LabelCounter;
 
-/**
- * Generates a new unique label ID, pushes it onto the stack, and returns it.
- */
+// Vygeneruje nové unikátní ID návěští, uloží ho na vrchol zásobníku a vrátí ho.
 size_t label_push(LabelCounter *counter);
 
-/**
- * Returns the label ID at the top of the stack without removing it.
- */
+// Vrátí ID návěští na vrcholu zásobníku bez jeho odstranění.
 size_t label_top(LabelCounter *counter);
 
-/**
- * Removes and returns the label ID at the top of the stack.
- */
+// Odebere a vrátí ID návěští z vrcholu zásobníku.
 size_t label_pop(LabelCounter *counter);
 
 #endif // CODE_LABEL_COUNTER_H
