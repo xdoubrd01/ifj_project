@@ -1,7 +1,8 @@
 /**
  * @project Implementace překladače imperativního jazyka IFJ26
  * @file hashtable.c
- * @authors Denis Doubrava, Jakub Grásgruber, Eliáš Oharek, Michal Zedníček
+ * @authors Denis Doubrava (xdoubrd01), Jakub Grásgruber (xgrasgj00), Eliáš Oharek (xoharee00),
+ * Michal Zedníček (xzednim00)
  * @brief Hashovací tabulka s otevřenou adresací, funkcí djb2 a lineárním
  * prohledáváním. Poskytuje vkládání, vyhledávání a odstraňování položek
  * s řetězcovými klíči. Rozlišuje prázdné, obsazené a odstraněné buňky

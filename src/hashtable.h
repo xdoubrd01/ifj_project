@@ -1,7 +1,8 @@
 /**
  * @project Implementace překladače imperativního jazyka IFJ26
  * @file hashtable.h
- * @author Denis Doubrava, Jakub Grásgruber, Eliáš Oharek, Michal Zedníček
+ * @author Denis Doubrava (xdoubrd01), Jakub Grásgruber (xgrasgj00), Eliáš Oharek (xoharee00),
+ * Michal Zedníček (xzednim00)
  * @brief Veřejné rozhraní hashovací tabulky s řetězcovými klíči
  * a obecnými hodnotami. Deklaruje operace pro vytvoření a uvolnění
  * tabulky a pro přístup k jejím položkám. Skrývá vnitřní reprezentaci

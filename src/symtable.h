@@ -2,7 +2,8 @@
  * @par Projekt
  * Implementace překladače imperativního jazyka IFJ26
  * @file symtable.h
- * @author Denis Doubrava, Jakub Grásgruber, Eliáš Oharek, Michal Zedníček
+ * @author Denis Doubrava (xdoubrd01), Jakub Grásgruber (xgrasgj00), Eliáš Oharek (xoharee00),
+ * Michal Zedníček (xzednim00)
  * @brief Definice symbolů a veřejné rozhraní tabulky symbolů.
  * Zpřístupňuje údaje o typech a vlastnostech proměnných, parametrů
  * a funkcí. Deklaruje správu rozsahů platnosti, vkládání a vyhledávání

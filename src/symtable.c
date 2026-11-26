@@ -2,7 +2,8 @@
  * @par Projekt
  * Implementace překladače imperativního jazyka IFJ26
  * @file symtable.c
- * @author Denis Doubrava, Jakub Grásgruber, Eliáš Oharek, Michal Zedníček
+ * @author Denis Doubrava (xdoubrd01), Jakub Grásgruber (xgrasgj00), Eliáš Oharek (xoharee00),
+ * Michal Zedníček (xzednim00)
  * @brief Správa funkcí, proměnných, parametrů a rozsahů platnosti
  * nad hashovacími tabulkami. Udržuje globální tabulku funkcí a řetězec
  * lokálních rozsahů platnosti pro proměnné a parametry. Umožňuje
