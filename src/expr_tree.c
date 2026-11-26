@@ -1,47 +1,60 @@
-// Project:    IFJ26
-// Filename:   expr_tree.c
-// Author:     Jakub Grásgruber <xgrasgj00>
+/**
+
+@par         IFJ26
+@file        expr_tree.c
+@authors     Jakub Grásgruber <xgrasgj00>
+@brief       Vytváření, uvolňování a ladicí výpis uzlů stromu výrazu.
+*/
 
 #include "expr_tree.h"
 #include <stdlib.h>
 
-// prompt: "Function that allocates one node of the tree, on allocation failure
-//          the caller should report error 99."
-// Creates a new expression node of the given kind and type, with all fields
-// zeroed
+// prompt: "Funkce, která alokuje jeden uzel stromu, při chybě alokace má
+//          volající nahlásit chybu 99."
+/**
+ * @brief Vytvoří nový uzel výrazu daného druhu a typu se všemi položkami vynulovanými.
+ *
+ * @param kind druh uzlu
+ * @param type typ výsledku uzlu
+ * @return nový uzel, nebo NULL při chybě alokace
+ */
 ExprNode *expr_new(ExprKind kind, data_type type) {
-    ExprNode *node = calloc(1, sizeof(ExprNode)); // zeroed -> pointers are NULL
+    ExprNode *node = calloc(1, sizeof(ExprNode)); // vynulováno -> ukazatele jsou NULL
     if (node == NULL) {
-        return NULL; // caller reports error 99
+        return NULL; // volající nahlásí chybu 99
     }
     node->kind = kind;
     node->type = type;
     return node;
 }
 
-// prompt: "Function that frees the whole tree, the nodes own the strings
-//          taken over from tokens, so free them too."
-// Frees the whole tree recursively, including owned strings and identifiers
+// prompt: "Funkce, která uvolní celý strom, uzly vlastní řetězce převzaté
+//          z tokenů, takže uvolni i je."
+/**
+ * @brief Rekurzivně uvolní celý strom včetně vlastněných řetězců a identifikátorů.
+ *
+ * @param node kořen uvolňovaného stromu, NULL je povolen
+ */
 void expr_free(ExprNode *node) {
     if (node == NULL) {
         return;
     }
     switch (node->kind) {
     case EXPR_STRING_LIT:
-        free(node->u.s_val); // owned string value
+        free(node->u.s_val); // vlastněná hodnota řetězce
         break;
     case EXPR_VAR:
-        free(node->u.var.name); // owned identifier
+        free(node->u.var.name); // vlastněný identifikátor
         break;
     case EXPR_BINARY:
-        expr_free(node->u.bin.left); // recursively free both operands
+        expr_free(node->u.bin.left); // rekurzivně uvolní oba operandy
         expr_free(node->u.bin.right);
         break;
     case EXPR_NEG:
     case EXPR_INT2FLOAT:
-        expr_free(node->u.operand); // single operand
+        expr_free(node->u.operand); // jediný operand
         break;
-    // AI - UPDATED: arguments and name of the called function
+    // AI - UPDATED: argumenty a jméno volané funkce
     case EXPR_MEMBER:
         expr_free(node->u.member.receiver);
         free(node->u.member.name);
@@ -54,15 +67,20 @@ void expr_free(ExprNode *node) {
         free(node->u.call.name);
         break;
     default:
-        break; // literals without heap data
+        break; // literály bez dat na haldě
     }
     free(node);
 }
 
-// prompt: "Debug print of the tree, so I can check the result of the parser
-//          on test inputs without the generator."
-// AI: type_name / op_name are helpers of expr_dump only
-// type name for debug output
+// prompt: "Ladicí výpis stromu, abych mohl zkontrolovat výsledek parseru
+//          na testovacích vstupech bez generátoru."
+// AI: type_name / op_name jsou jen pomocné funkce pro expr_dump
+/**
+ * @brief Vrátí jméno typu pro ladicí výpis.
+ *
+ * @param type typ
+ * @return textové jméno typu
+ */
 static const char *type_name(data_type type) {
     switch (type) {
     case type_int:
@@ -82,15 +100,25 @@ static const char *type_name(data_type type) {
     }
 }
 
-// operator name for debug output
+/**
+ * @brief Vrátí jméno operátoru pro ladicí výpis.
+ *
+ * @param op operátor
+ * @return textové jméno operátoru
+ */
 static const char *op_name(ExprOp op) {
     static const char *names[] = {"+",  "-",  "*", "/",  "idiv", "concat",
                                   "==", "!=", "<", "<=", ">",    ">="};
     return names[op];
 }
 
-// Dumps the tree in Prefix
-// AI: e.g. "i + d" -> (+ double (int2float (var i$0 int)) (var d$1 double))
+// AI: např. "i + d" -> (+ double (int2float (var i$0 int)) (var d$1 double))
+/**
+ * @brief Vypíše strom v prefixovém tvaru.
+ *
+ * @param node kořen vypisovaného stromu
+ * @param out  výstupní proud
+ */
 void expr_dump(const ExprNode *node, FILE *out) {
     if (node == NULL) {
         fprintf(out, "(null)");
@@ -129,7 +157,7 @@ void expr_dump(const ExprNode *node, FILE *out) {
         expr_dump(node->u.operand, out);
         fprintf(out, ")");
         break;
-    // AI - UPDATED: function call
+    // AI - UPDATED: volání funkce
     case EXPR_MEMBER:
         fprintf(out, "(member %s ", node->u.member.name);
         expr_dump(node->u.member.receiver, out);
