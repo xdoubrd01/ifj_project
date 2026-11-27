@@ -1,5 +1,6 @@
 /**
- * @par         Implementace překladače imperativního jazyka IFJ26
+ * @par Projekt
+ * Implementace překladače imperativního jazyka IFJ26
  * @file        code_generator.c
  * @authors     Michal Zednicek <xzednim00>
  * @brief       Implementace funkcí generátora kódu
@@ -34,7 +35,7 @@ static data_type current_func_ret_type = type_unknown;
 // printf("%s\n", inst);
 // }
 
-// AI START
+// AI – ZAČÁTEK
 void gen_inst0(const char *inst) { buffer_append_format(&code_buff, "%s\n", inst); }
 
 void gen_inst1(const char *inst, const char *arg1) {
@@ -53,7 +54,7 @@ void gen_inst4(const char *inst, const char *arg1, const char *arg2, const char 
                const char *arg4) {
     buffer_append_format(&code_buff, "%s %s %s %s %s\n", inst, arg1, arg2, arg3, arg4);
 }
-// AI END
+// AI – KONEC
 
 // -----    funkce pro formátování konstantních dat     -----
 
@@ -62,7 +63,7 @@ void gen_inst4(const char *inst, const char *arg1, const char *arg2, const char 
 // float@0x1.2666666666666p
 // use %a format specifier for printf function
 
-// AI START
+// AI – ZAČÁTEK
 void print_double(const double val) { buffer_append_format(&code_buff, "float@%a\n", val); }
 
 // prompt:
@@ -75,7 +76,7 @@ void print_bool(const bool val) {
 void print_nil(void) { buffer_append_string(&code_buff, "nil@nil\n"); }
 
 void print_int(const int val) { buffer_append_format(&code_buff, "int@%lld\n", (long long)val); }
-// AI END
+// AI – KONEC
 
 void print_string(const char *str) {
     buffer_append_string(&code_buff, "string@");
@@ -93,7 +94,7 @@ void print_string(const char *str) {
 }
 
 // -----   vestavěné funkce     -----
-// AI-ASSISTED START
+// AI – ZAČÁTEK
 void gen_builtin_print(void) {
     gen_inst1("LABEL", "$print");
     gen_inst0("CREATEFRAME");
@@ -144,10 +145,10 @@ void gen_builtin_read_int(void) {
     gen_inst0("POPFRAME");
     gen_inst0("RETURN");
 }
-// AI-ASSISTED END
+// AI – KONEC
 
 // prompt: generate C function emitting IFJcode26 subroutine for built-in readDouble()
-// AI START
+// AI – ZAČÁTEK
 void gen_builtin_read_double(void) {
     gen_inst1("LABEL", "$readDouble");
     gen_inst0("CREATEFRAME");
@@ -161,10 +162,10 @@ void gen_builtin_read_double(void) {
     gen_inst0("POPFRAME");
     gen_inst0("RETURN");
 }
-// AI END
+// AI – KONEC
 
 // prompt: generate C function emitting IFJcode26 subroutine for built-in toStr(value)
-// AI START
+// AI – ZAČÁTEK
 void gen_builtin_to_str(void) {
     gen_inst1("LABEL", "$toStr");
     gen_inst0("CREATEFRAME");
@@ -180,7 +181,7 @@ void gen_builtin_to_str(void) {
     gen_inst3("JUMPIFEQ", "$$to_str_unit", "LF@%type", "string@nil");
     gen_inst3("JUMPIFEQ", "$$to_str_bool", "LF@%type", "string@bool");
 
-    // string
+    // řetězec
     gen_inst2("MOVE", "LF@%res", "LF@%val");
     gen_inst1("JUMP", "$$to_str_end");
 
@@ -196,7 +197,7 @@ void gen_builtin_to_str(void) {
     gen_inst2("MOVE", "LF@%res", "string@()");
     gen_inst1("JUMP", "$$to_str_end");
 
-    // pre rozsirenie BOOLTHEN
+    // pro rozšíření BOOLTHEN
     gen_inst1("LABEL", "$$to_str_bool");
     gen_inst3("JUMPIFEQ", "$$to_str_bool_true", "LF@%val", "bool@true");
     gen_inst2("MOVE", "LF@%res", "string@false");
@@ -209,10 +210,10 @@ void gen_builtin_to_str(void) {
     gen_inst0("POPFRAME");
     gen_inst0("RETURN");
 }
-// AI END
+// AI – KONEC
 
 // prompt: generate C function emitting IFJcode26 subroutine for built-in ord(value, index)
-// AI START
+// AI – ZAČÁTEK
 void gen_builtin_ord(void) {
     gen_inst1("LABEL", "$ord");
     gen_inst0("CREATEFRAME");
@@ -223,7 +224,7 @@ void gen_builtin_ord(void) {
     gen_inst1("DEFVAR", "LF@%cond");
     gen_inst1("DEFVAR", "LF@%res");
 
-    // argumenty boli vlozene v poradi: str, idx -> vyberame opacne
+    // Argumenty byly vloženy v pořadí str, idx; odebíráme je v opačném pořadí.
     gen_inst1("POPS", "LF@%idx");
     gen_inst1("POPS", "LF@%str");
 
@@ -231,12 +232,12 @@ void gen_builtin_ord(void) {
     gen_inst3("LT", "LF@%cond", "LF@%idx", "int@0");
     gen_inst3("JUMPIFEQ", "$$ord_invalid", "LF@%cond", "bool@true");
 
-    // kontrola index >= len (pokryva aj prazdny retazec, kde len == 0)
+    // Kontrola index >= len zahrnuje také prázdný řetězec, pro který platí len == 0.
     gen_inst2("STRLEN", "LF@%len", "LF@%str");
     gen_inst3("LT", "LF@%cond", "LF@%idx", "LF@%len");
     gen_inst3("JUMPIFNEQ", "$$ord_invalid", "LF@%cond", "bool@true");
 
-    // validny index
+    // platný index
     gen_inst3("STRI2INT", "LF@%res", "LF@%str", "LF@%idx");
     gen_inst1("JUMP", "$$ord_end");
 
@@ -248,10 +249,10 @@ void gen_builtin_ord(void) {
     gen_inst0("POPFRAME");
     gen_inst0("RETURN");
 }
-// AI END
+// AI – KONEC
 
 // prompt: generate C function emitting IFJcode26 subroutine for built-in substr(value, start, end)
-// AI START
+// AI – ZAČÁTEK
 void gen_builtin_substr(void) {
     gen_inst1("LABEL", "$subStr");
     gen_inst0("CREATEFRAME");
@@ -271,27 +272,27 @@ void gen_builtin_substr(void) {
 
     gen_inst2("STRLEN", "LF@%len", "LF@%str");
 
-    // 1. start < 0 -> error 40
+    // 1. start < 0 -> chyba 40
     gen_inst3("LT", "LF@%cond", "LF@%start", "int@0");
     gen_inst3("JUMPIFEQ", "$$substr_err", "LF@%cond", "bool@true");
 
-    // 2. end < 0 -> error 40
+    // 2. end < 0 -> chyba 40
     gen_inst3("LT", "LF@%cond", "LF@%end", "int@0");
     gen_inst3("JUMPIFEQ", "$$substr_err", "LF@%cond", "bool@true");
 
-    // 3. start > end -> error 40
+    // 3. start > end -> chyba 40
     gen_inst3("GT", "LF@%cond", "LF@%start", "LF@%end");
     gen_inst3("JUMPIFEQ", "$$substr_err", "LF@%cond", "bool@true");
 
-    // 4. start >= len (t.j. nie je start < len) -> error 40
+    // 4. start >= len (tedy neplatí start < len) -> chyba 40
     gen_inst3("LT", "LF@%cond", "LF@%start", "LF@%len");
     gen_inst3("JUMPIFNEQ", "$$substr_err", "LF@%cond", "bool@true");
 
-    // 5. end > len -> error 40
+    // 5. end > len -> chyba 40
     gen_inst3("GT", "LF@%cond", "LF@%end", "LF@%len");
     gen_inst3("JUMPIFEQ", "$$substr_err", "LF@%cond", "bool@true");
 
-    // cyklus od start po end (vynimajuc end)
+    // Cyklus od start do end bez zahrnutí end.
     gen_inst2("MOVE", "LF@%res", "string@");
     gen_inst1("LABEL", "$$substr_loop");
     gen_inst3("JUMPIFEQ", "$$substr_end", "LF@%start", "LF@%end");
@@ -309,13 +310,13 @@ void gen_builtin_substr(void) {
     gen_inst0("POPFRAME");
     gen_inst0("RETURN");
 }
-// AI END
+// AI – KONEC
 
 // Prompt:
 // napis pomocne funkcie pre definovanie tychto funkcii v cielovom jazyku:
 // strLength, chr, readLine, toInt. pouzi instrukcnu sadu jazyka ifj26code.
 // navratovu hodnotu vracaj pomocou datoveho zasobniku
-// AI START
+// AI – ZAČÁTEK
 // Definice vestavěné funkce strLength(value: String): Int
 void gen_builtin_strLength(void) {
     gen_inst1("LABEL", "$strLength");
@@ -333,7 +334,7 @@ void gen_builtin_strLength(void) {
     gen_inst0("RETURN");
 }
 
-// Definícia vstavanej funkcie chr(code: Int): String
+// Definice vestavěné funkce chr(code: Int): String
 void gen_builtin_chr(void) {
     gen_inst1("LABEL", "$chr");
     gen_inst0("CREATEFRAME");
@@ -350,7 +351,7 @@ void gen_builtin_chr(void) {
     gen_inst0("RETURN");
 }
 
-// Definícia vstavanej funkcie readLine(): String
+// Definice vestavěné funkce readLine(): String
 void gen_builtin_readLine(void) {
     gen_inst1("LABEL", "$readLine");
     gen_inst0("CREATEFRAME");
@@ -359,7 +360,7 @@ void gen_builtin_readLine(void) {
     gen_inst1("DEFVAR", "LF@%retval");
     gen_inst2("READ", "LF@%retval", "string");
 
-    // Ak READ narazil na EOF (vrátil nil), nahradíme výsledok prázdnym reťazcom
+    // Pokud READ narazí na EOF a vrátí nil, nahradíme výsledek prázdným řetězcem.
     gen_inst3("JUMPIFNEQ", "$readLine_end", "LF@%retval", "nil@nil");
     gen_inst2("MOVE", "LF@%retval", "string@");
 
@@ -369,7 +370,7 @@ void gen_builtin_readLine(void) {
     gen_inst0("RETURN");
 }
 
-// Definícia vstavanej funkcie toInt(value: Double): Int
+// Definice vestavěné funkce toInt(value: Double): Int
 void gen_builtin_toInt(void) {
     gen_inst1("LABEL", "$toInt");
     gen_inst0("CREATEFRAME");
@@ -385,7 +386,7 @@ void gen_builtin_toInt(void) {
     gen_inst0("POPFRAME");
     gen_inst0("RETURN");
 }
-// AI END
+// AI – KONEC
 
 // -----   generování hlavičky IFJ26code      -----
 
@@ -474,7 +475,7 @@ void gen_func_start(SymTable *table, char *func_name, data_type ret_type) {
 
     size_t param_count = func_data->data.func.param_count;
 
-    // Definícia lokálnej premennej a jej naplnenie zo zásobníka od posledného parametra po prvý
+    // Definice lokální proměnné a její naplnění ze zásobníku od posledního parametru po první.
     for (size_t i = param_count; i > 0; i--) {
         symbol_data *var_data = symtable_search_var(table, func_data->data.func.param_names[i - 1]);
         if (var_data != NULL) {
@@ -484,13 +485,13 @@ void gen_func_start(SymTable *table, char *func_name, data_type ret_type) {
     }
 }
 
-// AI-ASSISTED START
+// AI – ZAČÁTEK
 void gen_func_return(ExprNode *ret_expr) {
     if (ret_expr != NULL) {
-        // 1. Vždy vyhodnotíme výraz (aj keď je návratový typ Unit, kvôli vedľajším efektom)
+        // 1. Výraz vždy vyhodnotíme, i při návratovém typu Unit, kvůli vedlejším účinkům.
         process_expr_node(ret_expr);
 
-        // Ak funkcia vracia Double a výraz bol Int, prevedieme ho
+        // Pokud funkce vrací Double a výraz má typ Int, provedeme převod.
         if (current_func_ret_type == type_double && ret_expr->type == type_int) {
             gen_inst0("INT2FLOATS");
         }
@@ -498,10 +499,9 @@ void gen_func_return(ExprNode *ret_expr) {
             gen_inst1("POPS", "GF@%tmp_res");
         }
     }
-    // Nepodmienený skok na spoločný epilóg funkcie, aby prebehol POPFRAME
+    // Nepodmíněný skok na společný epilog funkce, aby se provedl POPFRAME.
     buffer_append_format(&code_buff, "JUMP $%s$end\n", current_func_name);
 }
-
 
 void gen_func_end(void) {
     buffer_append_format(&code_buff, "LABEL $%s$end\n", current_func_name);
@@ -511,16 +511,16 @@ void gen_func_end(void) {
     }
 
     gen_inst0("POPFRAME");
-    // Návrat na inštrukciu za CALL
+    // Návrat na instrukci za CALL.
     gen_inst0("RETURN");
 
     buffer_flush(&code_buff);
 }
-// AI-ASSISTED END
+// AI – KONEC
 
 // -----    IF/ELSE         -----
 
-// AI-ASSISTED START
+// AI – ZAČÁTEK
 void gen_if_start(ExprNode *expr) {
     size_t current_id = label_push(&if_counter);
 
@@ -541,7 +541,7 @@ void gen_if_end(void) {
 
     buffer_append_format(&code_buff, "LABEL $if_skip_%d\n", current_id);
 }
-// AI-ASSISTED END
+// AI – KONEC
 
 // -----    WHILE cyklus        -----
 
@@ -613,7 +613,7 @@ void process_expr_node(ExprNode *node) {
             gen_inst0("NOTS");
             break;
         case OP_CONCAT:
-            // IFJcode26 neposkytuje zásobnikovou instrukci CONCATS.
+            // IFJcode26 neposkytuje zásobníkovou instrukci CONCATS.
             // Musíme vložit operandy do dočasných proměnných
             buffer_append_string(&code_buff, "POPS GF@%tmp_op2\n");
             buffer_append_string(&code_buff, "POPS GF@%tmp_op1\n");
@@ -623,7 +623,7 @@ void process_expr_node(ExprNode *node) {
         }
     }
 
-    // zpracování přidaných tokenú pro podporu VALMEM
+    // Zpracování přidaných tokenů pro podporu VALMEM.
     switch (node->kind) {
     case EXPR_MEMBER:
         process_expr_node(node->u.member.receiver);
@@ -696,7 +696,7 @@ void process_expr_node(ExprNode *node) {
 
 // -----    definice a přiřazování hodnot proměnným     -----
 
-// AI ASSISTED START
+// AI – ZAČÁTEK
 void gen_var_assign(SymTable *ts, char *var_name, data_type var_type, ExprNode *node) {
     symbol_data *var_data = symtable_search_var(ts, var_name);
     unsigned     var_id   = var_data->data.var.id;
@@ -725,4 +725,4 @@ void gen_def_var(SymTable *ts, char *var_name, data_type var_type, ExprNode *nod
         gen_var_assign(ts, var_name, var_type, node);
     }
 }
-// AI ASSISTED END
+// AI – KONEC

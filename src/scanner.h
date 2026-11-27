@@ -29,9 +29,9 @@ typedef enum {
     TOKEN_EOL, ///< Konec neprázdného logického řádku mimo kulaté závorky.
 
     // Identifikátory a literály.
-    TOKEN_IDENTIFIER, ///< Jméno, které není rozpoznaným klíčovým slovem ani názvem typu; atribut
-                      ///< s_val.
-    TOKEN_INT_LITERAL,    ///< Celočíselný literál s atributem i_val.
+    TOKEN_IDENTIFIER,  ///< Jméno, které není rozpoznaným klíčovým slovem ani názvem typu; atribut
+                       ///< s_val.
+    TOKEN_INT_LITERAL, ///< Celočíselný literál s atributem i_val.
     TOKEN_DOUBLE_LITERAL, ///< Desetinný literál s atributem d_val.
     TOKEN_STRING_LITERAL, ///< Řetězcový literál s vlastněným atributem s_val.
 

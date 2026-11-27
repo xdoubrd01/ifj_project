@@ -1,14 +1,15 @@
 /**
- * @par         Implementace překladače imperativního jazyka IFJ26
+ * @par Projekt
+ * Implementace překladače imperativního jazyka IFJ26
  * @file        code_buffer.c
  * @authors     Michal Zednicek <xzednim00>
- * @brief       Implementace vyrovnávací paměti výstupného kódu
+ * @brief       Implementace vyrovnávací paměti výstupního kódu
  */
 
 // Prompt:
 // napis kod pre bufferovanie generovaneho kodu pomocou prekladaca.
 // ide o jeden buffer a pomocne funkcie pre pracu s nim.
-// AI START
+// AI – ZAČÁTEK
 #include "code_buffer.h"
 #include <stdarg.h>
 #include <stdio.h>
@@ -77,7 +78,7 @@ bool buffer_append_string(CodeBuffer *buf, const char *str) {
     }
 
     // Zkopírujeme řetězec na konec bufferu
-    memcpy(buf->data + buf->length, str, str_len + 1); // +1 pre '\0'
+    memcpy(buf->data + buf->length, str, str_len + 1); // +1 pro koncový nulový znak '\0'
     buf->length += str_len;
 
     return true;
@@ -136,4 +137,4 @@ void buffer_flush(CodeBuffer *buf) {
         buffer_clear(buf);
     }
 }
-// AI END
+// AI – KONEC

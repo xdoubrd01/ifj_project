@@ -1,10 +1,10 @@
 /**
-
-@par         IFJ26
-@file        exp_parser.h
-@authors     Jakub Grásgruber <xgrasgj00>
-@brief       Rozhraní precedenční syntaktické analýzy výrazů.
-*/
+ * @par Projekt
+ * Implementace překladače imperativního jazyka IFJ26
+ * @file        exp_parser.h
+ * @authors     Jakub Grásgruber <xgrasgj00>
+ * @brief       Rozhraní precedenční syntaktické analýzy výrazů.
+ */
 
 #ifndef EXP_PARSER_H
 #define EXP_PARSER_H

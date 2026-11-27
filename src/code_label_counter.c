@@ -1,5 +1,6 @@
 /**
- * @par         Implementace překladače imperativního jazyka IFJ26
+ * @par Projekt
+ * Implementace překladače imperativního jazyka IFJ26
  * @file        code_label_counter.c
  * @authors     Michal Zednicek <xzednim00>
  * @brief       Implementace počítadla návěští

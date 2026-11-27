@@ -1,10 +1,10 @@
 /**
-
-@par         IFJ26
-@file        expr_tree.h
-@authors     Jakub Grásgruber <xgrasgj00>
-@brief       Typovaný strom výrazu, který předává výrazový parser generátoru kódu.
-*/
+ * @par Projekt
+ * Implementace překladače imperativního jazyka IFJ26
+ * @file        expr_tree.h
+ * @authors     Jakub Grásgruber <xgrasgj00>
+ * @brief       Typovaný strom výrazu, který předává výrazový parser generátoru kódu.
+ */
 
 #ifndef EXPR_TREE_H
 #define EXPR_TREE_H

@@ -1,10 +1,10 @@
 /**
-
-@par         IFJ26
-@file        semantic.h
-@authors     Jakub Grásgruber <xgrasgj00>
-@brief       Rozhraní sémantických kontrol, které volá parser a výrazový parser.
-*/
+ * @par Projekt
+ * Implementace překladače imperativního jazyka IFJ26
+ * @file        semantic.h
+ * @authors     Jakub Grásgruber <xgrasgj00>
+ * @brief       Rozhraní sémantických kontrol, které volá parser a výrazový parser.
+ */
 
 #ifndef SEMANTIC_H
 #define SEMANTIC_H

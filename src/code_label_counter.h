@@ -1,5 +1,6 @@
 /**
- * @par         Implementace překladače imperativního jazyka IFJ26
+ * @par Projekt
+ * Implementace překladače imperativního jazyka IFJ26
  * @file        code_label_counter.h
  * @authors     Michal Zednicek <xzednim00>
  * @brief       Implementace počítadla návěští
@@ -13,7 +14,8 @@
 #include <stdlib.h>
 
 /**
- * @brief Struktura pro správu a generování unikátních návěští při zanořených konstrukcích (např. if, while).
+ * @brief Struktura pro správu a generování unikátních návěští při zanořených konstrukcích (např.
+ * if, while).
  */
 typedef struct {
     size_t  cnt;       /**< Celkový počet dosud vygenerovaných návěští. */

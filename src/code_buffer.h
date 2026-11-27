@@ -1,8 +1,9 @@
 /**
- * @par         Implementace překladače imperativního jazyka IFJ26
+ * @par Projekt
+ * Implementace překladače imperativního jazyka IFJ26
  * @file        code_buffer.h
  * @authors     Michal Zednicek <xzednim00>
- * @brief       Implementace vyrovnávací paměti výstupného kódu
+ * @brief       Implementace vyrovnávací paměti výstupního kódu
  */
 
 #ifndef CODE_BUFFER_H
@@ -15,9 +16,9 @@
 #define BUFFER_INIT_CAPACITY 512
 
 typedef struct {
-    char  *data;     // Ukazovateľ na samotný vygenerovaný kód
-    size_t length;   // Aktuálna dĺžka kódu (bez \0)
-    size_t capacity; // Celková alokovaná kapacita buffera
+    char  *data;     // Ukazatel na samotný vygenerovaný kód
+    size_t length;   // Aktuální délka kódu (bez koncového nulového znaku \0)
+    size_t capacity; // Celková alokovaná kapacita bufferu
 } CodeBuffer;
 
 // Inicializuje buffer

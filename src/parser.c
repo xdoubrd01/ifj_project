@@ -8,58 +8,54 @@
  * @note Při jazykovém sjednocení a zpřesnění komentářů byla využita AI (ChatGPT).
  */
 
+#include "parser.h"
 #include "code_generator.h"
 #include "exp_parser.h"
 #include "expr_tree.h"
 #include "paramlists.h"
-#include "parser.h"
 #include "scanner.h"
 #include "semantic.h"
+#include "symtable.h"
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "symtable.h"
 
 // --- Stav parseru a pomocné datové struktury ---
 
 // Aktuální token a případný přednačtený token z lexeru.
-static Token tok; // aktuální token
-static Token lookahead;
-static bool has_lookahead = false;
-static SymTable *ts = NULL;
+static Token     tok; // aktuální token
+static Token     lookahead;
+static bool      has_lookahead       = false;
+static SymTable *ts                  = NULL;
 static data_type current_return_type = type_unknown;
-static char *entry_function_name = NULL;
-static bool stmt_returns = false;
-static bool block_returns = false;
+static char     *entry_function_name = NULL;
+static bool      stmt_returns        = false;
+static bool      block_returns       = false;
 // Úprava s pomocí AI (původní označení bez uvedeného promptu).
-static data_type stmt_value = type_unit; // typ hodnoty posledního příkazu
-static data_type block_value = type_unit; // typ hodnoty posledního příkazu bloku
-static int block_depth = 0; // 1 = přímo tělo funkce
-static bool has_explicit_type = false; // hlavička má uvedený návratový typ
-static bool emit_code = false; // kód se generuje až v posledním průchodu
+static data_type stmt_value        = type_unit; // typ hodnoty posledního příkazu
+static data_type block_value       = type_unit; // typ hodnoty posledního příkazu bloku
+static int       block_depth       = 0;         // 1 = přímo tělo funkce
+static bool      has_explicit_type = false;     // hlavička má uvedený návratový typ
+static bool      emit_code         = false;     // kód se generuje až v posledním průchodu
 
 // Prompt AI: "Navratovy typ funkce bez anotace se odvozuje z jejiho tela. Priprav
 //          jednoduchy graf volani z prvniho pruchodu, abychom poznali rekurzi
 //          a vedeli, v jakem poradi typy odvozovat."
 typedef struct {
-    char *name;
-    bool typed;
-    bool *callee_bare; // odkazy bez závorek se vyřeší po načtení všech hlaviček
-    char **callees; // jména volaných funkcí z prvního průchodu
-    size_t *callee_ids; // jejich indexy, doplní resolve_callees()
-    size_t callee_count;
+    char   *name;
+    bool    typed;
+    bool   *callee_bare; // odkazy bez závorek se vyřeší po načtení všech hlaviček
+    char  **callees;     // jména volaných funkcí z prvního průchodu
+    size_t *callee_ids;  // jejich indexy, doplní resolve_callees()
+    size_t  callee_count;
 } FuncInfo;
 
-static FuncInfo *func_infos = NULL;
-static size_t func_info_count = 0;
-static size_t func_info_pos = 0; // funkce jsou v každém průchodu ve stejném pořadí
+static FuncInfo *func_infos      = NULL;
+static size_t    func_info_count = 0;
+static size_t    func_info_pos   = 0; // funkce jsou v každém průchodu ve stejném pořadí
 
-typedef enum {
-    FIRST_ROUND,
-    INFER_ROUND,
-    SECOND_ROUND
-} ParserRound;
+typedef enum { FIRST_ROUND, INFER_ROUND, SECOND_ROUND } ParserRound;
 
 /*
  * Úsek vygenerovaný pomocí AI (Claude), prompt: "vygeneruj mi kostru vsech funkci
@@ -70,26 +66,26 @@ typedef enum {
 
 // Deklarace interních funkcí parseru (implementace jsou níže).
 // Práce s tokeny
-static void advance(void);
-static void expect(TokenType type);
+static void      advance(void);
+static void      expect(TokenType type);
 static TokenType peek_token(void);
 
 // Program a funkce
-static void parse_prolog(void);
-static void parse_program(ParserRound round);
-static void parse_functions(ParserRound round);
-static void parse_function(ParserRound round);
-static void parse_opt_annotation(void);
-static void parse_opt_eol(void);
+static void      parse_prolog(void);
+static void      parse_program(ParserRound round);
+static void      parse_functions(ParserRound round);
+static void      parse_function(ParserRound round);
+static void      parse_opt_annotation(void);
+static void      parse_opt_eol(void);
 static data_type parse_function_body(void);
-static void skip_function_body(FuncInfo *info);
+static void      skip_function_body(FuncInfo *info);
 
 // Parametry, typy a pomocná pole
-static void append_param(data_type **types, size_t *count, data_type type);
-static void append_param_name(char ***names, size_t count, char *name);
+static void      append_param(data_type **types, size_t *count, data_type type);
+static void      append_param_name(char ***names, size_t count, char *name);
 static data_type parse_parameters_start(char **out_name);
-static void parse_parameters_tail(data_type **types, char ***names, size_t *count);
-static void parse_parameters_list(data_type **types, char ***names, size_t *count);
+static void      parse_parameters_tail(data_type **types, char ***names, size_t *count);
+static void      parse_parameters_list(data_type **types, char ***names, size_t *count);
 static data_type parse_type(void);
 static data_type parse_opt_type(void);
 static data_type parse_opt_return_type(void);
@@ -101,14 +97,14 @@ static void parse_stmt(void);
 static void parse_stmt_tail(void);
 static void parse_stmt_tail_id(char *var_name);
 static void parse_opt_return_tail(void);
-static int is_stmt_start(TokenType t);
+static int  is_stmt_start(TokenType t);
 
 // Výrazy a volání funkcí
-static int is_non_id_expression(TokenType t);
+static int       is_non_id_expression(TokenType t);
 static data_type parse_call_or_exp(ExprNode **out_expr);
 static ExprNode *parse_expression_wrapper(void);
-static void check_function_value(data_type value);
-static void parse_value_stmt(void);
+static void      check_function_value(data_type value);
+static void      parse_value_stmt(void);
 
 // --- Práce s tokeny a základní pravidla ---
 
@@ -120,7 +116,7 @@ static void advance(void) {
 
     // Přednačtený token
     if (has_lookahead) {
-        tok = lookahead;
+        tok           = lookahead;
         has_lookahead = false;
     }
     // Jinak čteme přímo z lexeru.
@@ -206,7 +202,7 @@ static void resolve_callees(void) {
 
     for (size_t i = 0; i < func_info_count; i++) {
         FuncInfo *info = &func_infos[i];
-        size_t kept = 0;
+        size_t    kept = 0;
 
         if (info->callee_count > 0) {
             info->callee_ids = malloc(info->callee_count * sizeof(size_t));
@@ -214,16 +210,18 @@ static void resolve_callees(void) {
                 exit(99);
         }
         for (size_t j = 0; j < info->callee_count; j++) {
-            size_t *found = bsearch(info->callees[j], order, func_info_count, sizeof(size_t), compare_name_to_id);
-            if (found != NULL && (!info->callee_bare[j] || paramlists_is_bare(ts, info->callees[j]))) {
+            size_t *found = bsearch(info->callees[j], order, func_info_count, sizeof(size_t),
+                                    compare_name_to_id);
+            if (found != NULL &&
+                (!info->callee_bare[j] || paramlists_is_bare(ts, info->callees[j]))) {
                 info->callee_ids[kept++] = *found;
             }
             free(info->callees[j]);
         }
         free(info->callees);
         free(info->callee_bare);
-        info->callee_bare = NULL;
-        info->callees = NULL;
+        info->callee_bare  = NULL;
+        info->callees      = NULL;
         info->callee_count = kept;
     }
     free(order);
@@ -231,8 +229,8 @@ static void resolve_callees(void) {
 
 // Vrátí true, pokud se z funkce start lze voláním vrátit zpět do ní.
 static bool is_recursive(size_t start, size_t *stack, size_t *visited) {
-    size_t top = 0;
-    stack[top++] = start;
+    size_t top     = 0;
+    stack[top++]   = start;
     visited[start] = start + 1;
 
     while (top > 0) {
@@ -244,7 +242,7 @@ static bool is_recursive(size_t start, size_t *stack, size_t *visited) {
                 return true;
             if (visited[next] != start + 1) {
                 visited[next] = start + 1;
-                stack[top++] = next;
+                stack[top++]  = next;
             }
         }
     }
@@ -253,7 +251,7 @@ static bool is_recursive(size_t start, size_t *stack, size_t *visited) {
 
 // Přímo i nepřímo rekurzivní funkce musí mít uvedený návratový typ.
 static void check_inferred_recursion(void) {
-    size_t *stack = malloc(func_info_count * sizeof(size_t));
+    size_t *stack   = malloc(func_info_count * sizeof(size_t));
     size_t *visited = calloc(func_info_count, sizeof(size_t));
     if (stack == NULL || visited == NULL)
         exit(99);
@@ -290,7 +288,7 @@ static void free_func_infos(void) {
         free(func_infos[i].name);
     }
     free(func_infos);
-    func_infos = NULL;
+    func_infos      = NULL;
     func_info_count = 0;
 }
 
@@ -390,7 +388,7 @@ static void append_param(data_type **types, size_t *count, data_type type) {
     if (tmp == NULL)
         exit(99);
 
-    *types = tmp;
+    *types           = tmp;
     (*types)[*count] = type;
     (*count)++;
 }
@@ -404,7 +402,7 @@ static void append_param_name(char ***names, size_t count, char *name) {
         exit(99);
     }
 
-    *names = tmp;
+    *names              = tmp;
     (*names)[count - 1] = name;
 }
 
@@ -441,7 +439,7 @@ static void parse_parameters_tail(data_type **types, char ***names, size_t *coun
         if (tok.type == TOKEN_RPAREN && tok.newline_before)
             return;
 
-        char *name = NULL;
+        char     *name = NULL;
         data_type type = parse_parameters_start(&name);
 
         append_param(types, count, type);
@@ -453,7 +451,7 @@ static void parse_parameters_tail(data_type **types, char ***names, size_t *coun
 
 static void parse_parameters_list(data_type **types, char ***names, size_t *count) {
     if (tok.type == TOKEN_IDENTIFIER) {
-        char *name = NULL;
+        char     *name = NULL;
         data_type type = parse_parameters_start(&name);
 
         append_param(types, count, type);
@@ -482,12 +480,12 @@ static void add_callee(FuncInfo *info, const char *name, bool bare) {
     if (grown == NULL)
         exit(99);
     info->callees = grown;
-    bool *flags = realloc(info->callee_bare, (info->callee_count + 1) * sizeof(*flags));
+    bool *flags   = realloc(info->callee_bare, (info->callee_count + 1) * sizeof(*flags));
     if (flags == NULL)
         exit(99);
-    info->callee_bare = flags;
+    info->callee_bare                     = flags;
     info->callee_bare[info->callee_count] = bare;
-    info->callees[info->callee_count] = strdup(name);
+    info->callees[info->callee_count]     = strdup(name);
     if (info->callees[info->callee_count] == NULL)
         exit(99);
     info->callee_count++;
@@ -496,9 +494,9 @@ static void add_callee(FuncInfo *info, const char *name, bool bare) {
 // Sbírá volání se zohledněním lokálních proměnných a jmen členů.
 static void skip_token(FuncInfo *info, ParamBindings *bindings) {
     if (info != NULL) {
-        int reference;
+        int       reference;
         TokenType next = tok.type == TOKEN_IDENTIFIER ? peek_token() : TOKEN_EOF;
-        int rc = paramlists_track(bindings, &tok, next, &reference);
+        int       rc   = paramlists_track(bindings, &tok, next, &reference);
         if (rc != 0)
             exit(rc);
         if (reference)
@@ -558,9 +556,9 @@ static void parse_function(ParserRound round) {
     if (symtable_enter_scope(ts) == false)
         exit(99);
 
-    data_type *param_types = NULL;
-    char **param_names = NULL;
-    size_t param_count = 0;
+    data_type *param_types     = NULL;
+    char     **param_names     = NULL;
+    size_t     param_count     = 0;
     ParamLists parameter_lists = {0};
     // Funkce může obsahovat více seznamů parametrů nebo žádný.
     while (tok.type == TOKEN_LPAREN) {
@@ -592,7 +590,7 @@ static void parse_function(ParserRound round) {
     }
 
     if (round == FIRST_ROUND) {
-       
+
         bool success = symtable_insert_func(ts, func_name, ret_type, param_count, param_types);
 
         if (!success) {
@@ -602,7 +600,8 @@ static void parse_function(ParserRound round) {
         }
 
         // Jména musí být ve stejném pořadí jako typy parametrů.
-        if (!symtable_set_func_param_names(ts, func_name, param_count, (const char *const *)param_names))
+        if (!symtable_set_func_param_names(ts, func_name, param_count,
+                                           (const char *const *)param_names))
             exit(99);
 
         int list_rc = paramlists_set_signature(ts, func_name, &parameter_lists);
@@ -613,14 +612,14 @@ static void parse_function(ParserRound round) {
         FuncInfo *grown = realloc(func_infos, (func_info_count + 1) * sizeof(FuncInfo));
         if (grown == NULL)
             exit(99);
-        func_infos = grown;
+        func_infos                       = grown;
         func_infos[func_info_count].name = strdup(func_name);
         if (func_infos[func_info_count].name == NULL)
             exit(99);
-        func_infos[func_info_count].typed = (ret_type != type_unknown);
-        func_infos[func_info_count].callee_bare = NULL;
-        func_infos[func_info_count].callees = NULL;
-        func_infos[func_info_count].callee_ids = NULL;
+        func_infos[func_info_count].typed        = (ret_type != type_unknown);
+        func_infos[func_info_count].callee_bare  = NULL;
+        func_infos[func_info_count].callees      = NULL;
+        func_infos[func_info_count].callee_ids   = NULL;
         func_infos[func_info_count].callee_count = 0;
         func_info_count++;
     }
@@ -635,7 +634,7 @@ static void parse_function(ParserRound round) {
         if (info->typed || !callees_resolved(info)) {
             skip_function_body(NULL);
         } else {
-            has_explicit_type = false;
+            has_explicit_type   = false;
             current_return_type = type_unknown;
 
             data_type inferred = parse_function_body();
@@ -647,7 +646,7 @@ static void parse_function(ParserRound round) {
     } else {
         has_explicit_type = (ret_type != type_unknown);
         // U funkce bez uvedeného typu je v tabulce už odvozený typ.
-        ret_type = symtable_search_func(ts, func_name)->data.func.ret_type;
+        ret_type            = symtable_search_func(ts, func_name)->data.func.ret_type;
         current_return_type = ret_type;
 
         gen_func_start(ts, func_name, ret_type);
@@ -685,8 +684,8 @@ static void parse_block(bool new_scope) {
     parse_stmts();
 
     // Výsledek bloku určuje jeho poslední příkaz.
-    bool last_returns = stmt_returns;
-    data_type last_value = stmt_value;
+    bool      last_returns = stmt_returns;
+    data_type last_value   = stmt_value;
 
     expect(TOKEN_DEDENT);
 
@@ -694,7 +693,7 @@ static void parse_block(bool new_scope) {
     if (new_scope)
         symtable_leave_scope(ts);
     block_returns = last_returns;
-    block_value = last_value;
+    block_value   = last_value;
 }
 
 static data_type parse_type(void) {
@@ -720,7 +719,8 @@ static data_type parse_type(void) {
 }
 
 static int is_non_id_expression(TokenType t) {
-    if (t == TOKEN_STRING_LITERAL || t == TOKEN_DOUBLE_LITERAL || t == TOKEN_INT_LITERAL || t == TOKEN_MINUS || t == TOKEN_PLUS || t == TOKEN_LPAREN) {
+    if (t == TOKEN_STRING_LITERAL || t == TOKEN_DOUBLE_LITERAL || t == TOKEN_INT_LITERAL ||
+        t == TOKEN_MINUS || t == TOKEN_PLUS || t == TOKEN_LPAREN) {
         return 1;
     } else {
         return 0;
@@ -774,11 +774,11 @@ static void parse_stmt_tail_id(char *var_name) {
 
     advance();
 
-    ExprNode *expr = NULL;
+    ExprNode *expr      = NULL;
     data_type expr_type = parse_call_or_exp(&expr);
 
     unsigned var_id;
-    int rc = sem_check_assignment(ts, var_name, expr_type, &var_id);
+    int      rc = sem_check_assignment(ts, var_name, expr_type, &var_id);
 
     if (rc != 0) {
         expr_free(expr);
@@ -815,12 +815,12 @@ static data_type parse_opt_type(void) {
 // Vrácený strom musí uvolnit ten, kdo funkci zavolal.
 static ExprNode *parse_expression_wrapper(void) {
     ExprNode *expr = NULL;
-    int result;
+    int       result;
 
     if (has_lookahead == true) {
         result = parse_expression(ts, &tok, &lookahead, &expr);
 
-        tok = lookahead;
+        tok           = lookahead;
         has_lookahead = false;
     } else {
         result = parse_expression(ts, NULL, &tok, &expr);
@@ -839,7 +839,8 @@ static void check_function_value(data_type value) {
     if (value == type_bool) {
         exit(6); // Hodnotu typu Boolean nelze vrátit.
     }
-    if (current_return_type != type_unknown && current_return_type != type_unit && !symtable_type_compatible(current_return_type, value))
+    if (current_return_type != type_unknown && current_return_type != type_unit &&
+        !symtable_type_compatible(current_return_type, value))
         exit(6);
 }
 
@@ -869,7 +870,8 @@ static void parse_opt_return_tail(void) {
     if (!has_explicit_type)
         exit(6);
 
-    if (tok.type == TOKEN_EOL || tok.type == TOKEN_SEMICOLON || tok.type == TOKEN_DEDENT || tok.type == TOKEN_EOF) {
+    if (tok.type == TOKEN_EOL || tok.type == TOKEN_SEMICOLON || tok.type == TOKEN_DEDENT ||
+        tok.type == TOKEN_EOF) {
         if (current_return_type != type_unit)
             exit(6);
 
@@ -878,7 +880,7 @@ static void parse_opt_return_tail(void) {
         parse_stmt_tail();
         return;
     } else if (tok.type == TOKEN_IDENTIFIER || is_non_id_expression(tok.type)) {
-        ExprNode *expr = NULL;
+        ExprNode *expr      = NULL;
         data_type expr_type = parse_call_or_exp(&expr);
 
         check_function_value(expr_type);
@@ -910,7 +912,7 @@ static data_type parse_function_body(void) {
         check_function_value(block_value);
         return block_value;
     } else if (tok.type == TOKEN_IDENTIFIER || is_non_id_expression(tok.type)) {
-        ExprNode *expr = NULL;
+        ExprNode *expr      = NULL;
         data_type expr_type = parse_call_or_exp(&expr);
 
         check_function_value(expr_type);
@@ -930,7 +932,9 @@ static data_type parse_function_body(void) {
 // --- Zpracování příkazů ---
 
 static int is_stmt_start(TokenType t) {
-    if (t == TOKEN_KW_VAR || t == TOKEN_KW_VAL || t == TOKEN_IDENTIFIER || is_non_id_expression(t) == 1 || t == TOKEN_KW_RETURN || t == TOKEN_KW_IF || t == TOKEN_KW_WHILE) {
+    if (t == TOKEN_KW_VAR || t == TOKEN_KW_VAL || t == TOKEN_IDENTIFIER ||
+        is_non_id_expression(t) == 1 || t == TOKEN_KW_RETURN || t == TOKEN_KW_IF ||
+        t == TOKEN_KW_WHILE) {
         return 1;
     } else {
         return 0;
@@ -939,7 +943,7 @@ static int is_stmt_start(TokenType t) {
 
 static void parse_stmt(void) {
     stmt_returns = false;
-    stmt_value = type_unit;
+    stmt_value   = type_unit;
 
     // Samostatný výrazový příkaz nesmí začínat unárním plus.
     if (tok.type == TOKEN_PLUS)
@@ -959,7 +963,7 @@ static void parse_stmt(void) {
         expect(TOKEN_IDENTIFIER);
         data_type var_type = parse_opt_type();
         expect(TOKEN_ASSIGN);
-        ExprNode *expr = NULL;
+        ExprNode *expr      = NULL;
         data_type expr_type = parse_call_or_exp(&expr);
 
         int rc = sem_declare_variable(ts, var_name, var_type, expr_type, is_var, NULL);
@@ -999,7 +1003,7 @@ static void parse_stmt(void) {
 
         // Hodnoty z těla cyklu se do nadřazeného bloku nepřenášejí.
         stmt_returns = false;
-        stmt_value = type_unit;
+        stmt_value   = type_unit;
     } else if (tok.type == TOKEN_KW_RETURN) {
         advance();
         parse_opt_return_tail();
@@ -1022,8 +1026,8 @@ static void parse_stmt(void) {
         expr_free(expr);
 
         parse_block(true);
-        bool then_returns = block_returns;
-        data_type then_value = block_value;
+        bool      then_returns = block_returns;
+        data_type then_value   = block_value;
 
         expect(TOKEN_KW_ELSE);
         expect(TOKEN_EOL);
@@ -1031,8 +1035,8 @@ static void parse_stmt(void) {
             gen_if_else();
 
         parse_block(true);
-        bool else_returns = block_returns;
-        data_type else_value = block_value;
+        bool      else_returns = block_returns;
+        data_type else_value   = block_value;
 
         if (emit_code)
             gen_if_end();

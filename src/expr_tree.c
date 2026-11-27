@@ -1,10 +1,10 @@
 /**
-
-@par         IFJ26
-@file        expr_tree.c
-@authors     Jakub Grásgruber <xgrasgj00>
-@brief       Vytváření, uvolňování a ladicí výpis uzlů stromu výrazu.
-*/
+ * @par Projekt
+ * Implementace překladače imperativního jazyka IFJ26
+ * @file        expr_tree.c
+ * @authors     Jakub Grásgruber <xgrasgj00>
+ * @brief       Vytváření, uvolňování a ladicí výpis uzlů stromu výrazu.
+ */
 
 #include "expr_tree.h"
 #include <stdlib.h>

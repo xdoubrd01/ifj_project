@@ -1,3 +1,10 @@
+/**
+ * @par Projekt
+ * Implementace překladače imperativního jazyka IFJ26
+ * @file main.c
+ * @author Eliáš Oharek (xoharee00)
+ */
+
 #include "parser.h"
 #include "scanner.h"
 #include <stdint.h>

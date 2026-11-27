@@ -1,10 +1,11 @@
 /**
-
-@par         IFJ26
-@file        semantic.c
-@authors     Jakub Grásgruber <xgrasgj00>
-@brief       Sémantické kontroly proměnných, volání a výrazů včetně implicitního převodu Int na Double.
-*/
+ * @par Projekt
+ * Implementace překladače imperativního jazyka IFJ26
+ * @file        semantic.c
+ * @authors     Jakub Grásgruber <xgrasgj00>
+ * @brief       Sémantické kontroly proměnných, volání a výrazů včetně implicitního převodu Int na
+ * Double.
+ */
 
 #include "semantic.h"
 #include <stdio.h>

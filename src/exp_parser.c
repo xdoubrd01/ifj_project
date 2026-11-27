@@ -1,10 +1,10 @@
 /**
-
-@par         IFJ26
-@file        exp_parser.c
-@authors     Jakub Grásgruber <xgrasgj00>
-@brief       Precedenční syntaktická analýza výrazů, která z tokenů staví typovaný strom výrazu.
-*/
+ * @par Projekt
+ * Implementace překladače imperativního jazyka IFJ26
+ * @file        exp_parser.c
+ * @authors     Jakub Grásgruber <xgrasgj00>
+ * @brief       Precedenční syntaktická analýza výrazů, která z tokenů staví typovaný strom výrazu.
+ */
 
 #include "exp_parser.h"
 #include "array_utils.h"
@@ -457,7 +457,7 @@ static int parse_call(SymTable *st, int item_index, Token *current) {
         return rc; // *current dál vlastní volající
     }
 
-    call->u.call.name                       = stack[item_index].token.attribute.s_val; // vlastnictví
+    call->u.call.name = stack[item_index].token.attribute.s_val; // vlastnictví
     stack[item_index].token.attribute.s_val = NULL;
     call->u.call.args                       = args;
     call->u.call.argc                       = argc;

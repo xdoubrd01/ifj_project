@@ -1,3 +1,16 @@
+/**
+ * @par Projekt
+ * Implementace překladače imperativního jazyka IFJ26
+ * @file paramlists.c
+ * @author Denis Doubrava (xdoubrd01), Jakub Grásgruber (xgrasgj00), Eliáš Oharek (xoharee00),
+ * Michal Zedníček (xzednim00)
+ * @brief Implementace podpory seznamů parametrů a volání funkcí pro PARAMLISTS.
+ * Spravuje délky seznamů a jejich kopie uložené v signaturách funkcí.
+ * Kontroluje členění argumentů a vytváří uzly volání funkcí samotným jménem.
+ * Při prvním průchodu sleduje lokální deklarace pro správné sestavení grafu volání.
+ * @note AI byla využita k lepšímu znění a obsahu komentářů.
+ */
+
 #include "paramlists.h"
 #include "array_utils.h"
 #include "semantic.h"
@@ -6,39 +19,71 @@
 #include <stdlib.h>
 #include <string.h>
 
+/**
+ * @brief Připojí délku dalšího seznamu do dynamického pole.
+ * @param lists Platná vynulovaná nebo již používaná struktura seznamů.
+ * @param length Počet prvků přidávaného seznamu; 0 označuje prázdný seznam.
+ * @return true při přidání; false při přetečení nebo selhání alokace.
+ * @note Při neúspěchu zůstávají dosavadní položky a jejich počet zachované.
+ */
 bool paramlists_append(ParamLists *lists, size_t length) {
     size_t capacity;
+    // Nový počet i velikost alokace musí být reprezentovatelné typem size_t.
     if (lists->count == SIZE_MAX || !array_next_capacity(lists->capacity, lists->count + 1,
                                                          sizeof(*lists->sizes), 4, &capacity))
         return false;
     if (capacity != lists->capacity) {
+        // Původní ukazatel nahradíme až po úspěšné realokaci.
         void *sizes = realloc(lists->sizes, capacity * sizeof(*lists->sizes));
         if (sizes == NULL)
             return false;
         lists->sizes    = sizes;
         lists->capacity = capacity;
     }
+    // Po zajištění kapacity uložíme délku a teprve poté zvýšíme počet seznamů.
     lists->sizes[lists->count++] = length;
     return true;
 }
+/**
+ * @brief Uvolní vlastněné pole délek a obnoví prázdný stav struktury.
+ * @param lists Platná inicializovaná struktura; nesmí být NULL.
+ */
 void paramlists_free(ParamLists *lists) {
     free(lists->sizes);
     *lists = (ParamLists){0};
 }
+/**
+ * @brief Zkopíruje členění parametrů do signatury zaregistrované funkce.
+ * @param table Tabulka symbolů obsahující cílovou funkci.
+ * @param name Jméno funkce ukončené nulovým znakem.
+ * @param lists Platné zdrojové členění; zůstává ve vlastnictví volajícího.
+ * @return 0 při úspěchu; 99 při nenalezení funkce, přetečení nebo nedostatku paměti.
+ * @note Celkový počet parametrů a jejich typy se touto funkcí nemění.
+ */
 int paramlists_set_signature(SymTable *table, const char *name, const ParamLists *lists) {
     symbol_data *fn = symtable_search_func(table, name);
     if (fn == NULL || lists->count > SIZE_MAX / sizeof(size_t))
         return 99;
+    // Nulový počet seznamů nepotřebuje alokaci a odlišuje se od jednoho prázdného seznamu.
     size_t *sizes = lists->count ? malloc(lists->count * sizeof(*sizes)) : NULL;
     if (lists->count && sizes == NULL)
         return 99;
     if (lists->count)
         memcpy(sizes, lists->sizes, lists->count * sizeof(*sizes));
+    // Dosavadní signaturu změníme až po úspěšném vytvoření úplné kopie pole.
     free(fn->data.func.param_list_sizes);
     fn->data.func.param_list_sizes = sizes;
     fn->data.func.param_list_count = lists->count;
     return 0;
 }
+/**
+ * @brief Ověří shodu počtu a délek seznamů argumentů se signaturou funkce.
+ * @param table Prohledávaná tabulka symbolů.
+ * @param name Jméno volané funkce.
+ * @param lists Platné členění argumentů konkrétního volání.
+ * @return 0 při shodě; 3 pro neznámou funkci; 5 pro chybný počet nebo délku seznamů.
+ * @note Datové typy argumentů se zde nekontrolují.
+ */
 int paramlists_check_shape(SymTable *table, const char *name, const ParamLists *lists) {
     symbol_data *fn = symtable_search_func(table, name);
     if (fn == NULL)
@@ -46,6 +91,7 @@ int paramlists_check_shape(SymTable *table, const char *name, const ParamLists *
     if (lists->count != fn->data.func.param_list_count)
         return 5;
     for (size_t i = 0; i < lists->count; i++) {
+        // Bez samostatného pole délek použijeme celkový počet parametrů v záznamu funkce.
         size_t length = fn->data.func.param_list_sizes ? fn->data.func.param_list_sizes[i]
                                                        : fn->data.func.param_count;
         if (length != lists->sizes[i])
@@ -53,27 +99,51 @@ int paramlists_check_shape(SymTable *table, const char *name, const ParamLists *
     }
     return 0;
 }
+/**
+ * @brief Rozpozná funkci deklarovanou bez seznamu parametrů.
+ * @param table Prohledávaná tabulka symbolů.
+ * @param name Jméno zkoumané funkce.
+ * @return true pro existující funkci s nulovým počtem seznamů; jinak false.
+ */
 bool paramlists_is_bare(SymTable *table, const char *name) {
     symbol_data *fn = symtable_search_func(table, name);
     return fn != NULL && fn->data.func.param_list_count == 0;
 }
+/**
+ * @brief Ověří volání samotným jménem a vytvoří jeho typovaný uzel EXPR_CALL.
+ * @param table Tabulka symbolů obsahující signatury funkcí.
+ * @param name Platný ukazatel na vlastněné jméno; při úspěchu se nastaví na NULL.
+ * @param out Platný výstupní ukazatel na vytvořený uzel; při chybě se nemění.
+ * @return 0 při úspěchu; jinak kód kontroly volání nebo 99 při chybě alokace.
+ * @pre Volající již vyloučil, že jméno označuje viditelnou proměnnou.
+ * @note Vlastnictví jména se předá uzlu až po úspěšném ověření a alokaci.
+ */
 int paramlists_bare_call(SymTable *table, char **name, ExprNode **out) {
     ParamLists no_lists = {0};
-    int        rc       = paramlists_check_shape(table, *name, &no_lists);
+    // Volání bez závorek musí odpovídat deklaraci bez jakéhokoli seznamu parametrů.
+    int rc = paramlists_check_shape(table, *name, &no_lists);
     if (rc != 0)
         return rc;
     data_type type;
+    // Sémantická kontrola doplní návratový typ funkce a ověří nulový počet argumentů.
     rc = sem_check_call(table, *name, NULL, 0, &type);
     if (rc != 0)
         return rc;
     ExprNode *node = expr_new(EXPR_CALL, type);
     if (node == NULL)
         return 99;
+    // Vynulovaný uzel už má prázdné pole argumentů; převezme pouze jméno funkce.
     node->u.call.name = *name;
     *name             = NULL;
     *out              = node;
     return 0;
 }
+/**
+ * @brief Zařadí čekající lokální deklaraci mezi aktivní vazby jmen.
+ * @param b Platný stav sledování lokálních deklarací.
+ * @return 0 při úspěchu nebo bez čekající deklarace; 99 při přetečení či chybě alokace.
+ * @note Jméno se nekopíruje, jeho vlastnictví se přesune z pending do pole items.
+ */
 static int commit_binding(ParamBindings *b) {
     if (b->pending == NULL)
         return 0;
@@ -88,13 +158,24 @@ static int commit_binding(ParamBindings *b) {
         b->items    = items;
         b->capacity = capacity;
     }
+    // Deklaraci spojíme s aktuální hloubkou, aby ji později odstranil odpovídající DEDENT.
     b->items[b->count++] = (ParamBinding){b->pending, b->depth};
     b->pending           = NULL;
     return 0;
 }
+/**
+ * @brief Sleduje rozsahy a lokální deklarace při sběru odkazů na funkce.
+ * @param b Platný stav prvního průchodu s nastavenou vypůjčenou tabulkou symbolů.
+ * @param token Platný aktuální token; jeho data zůstávají volajícímu.
+ * @param next Typ následujícího tokenu.
+ * @param reference Výstup: 0 bez odkazu, 1 volání se závorkami, 2 možné volání samotným jménem.
+ * @return 0 při úspěchu; 99 při přetečení hloubky, velikosti pole nebo chybě alokace.
+ * @note Jde o sběr závislostí; skutečnou platnost volání ověřují další části překladače.
+ */
 int paramlists_track(ParamBindings *b, const Token *token, TokenType next, int *reference) {
     TokenType type = token->type;
     *reference     = 0;
+    // Nové jméno aktivujeme až na konci příkazu, aby nezastínilo jména v inicializátoru.
     if (type == TOKEN_EOL || type == TOKEN_SEMICOLON || type == TOKEN_DEDENT || type == TOKEN_EOF) {
         int rc = commit_binding(b);
         if (rc != 0)
@@ -105,6 +186,7 @@ int paramlists_track(ParamBindings *b, const Token *token, TokenType next, int *
             return 99;
         b->depth++;
     } else if (type == TOKEN_DEDENT) {
+        // Při opuštění bloku uvolníme deklarace z jeho úrovně a případných hlubších úrovní.
         while (b->count && b->items[b->count - 1].depth >= b->depth)
             free(b->items[--b->count].name);
         if (b->depth)
@@ -112,14 +194,17 @@ int paramlists_track(ParamBindings *b, const Token *token, TokenType next, int *
     } else if (type == TOKEN_IDENTIFIER) {
         const char *name = token->attribute.s_val;
         if (b->previous == TOKEN_KW_VAL || b->previous == TOKEN_KW_VAR) {
+            // Kopie přežije zánik aktuálního tokenu a na aktivaci počká v pending.
             free(b->pending);
             b->pending = string_duplicate(name);
             if (b->pending == NULL)
                 return 99;
         } else if (b->previous != TOKEN_DOT && b->previous != TOKEN_COLON && next != TOKEN_ASSIGN) {
+            // Jméno členu, typu ani cíl přiřazení nepovažujeme za odkaz na funkci.
             if (next == TOKEN_LPAREN)
                 *reference = 1;
             else if (symtable_search_var(b->table, name) == NULL) {
+                // Vedle tabulky symbolů prověříme i lokální deklarace zaznamenané při průchodu.
                 bool local = false;
                 for (size_t i = b->count; i > 0; i--) {
                     if (strcmp(b->items[i - 1].name, name) == 0) {
@@ -135,6 +220,11 @@ int paramlists_track(ParamBindings *b, const Token *token, TokenType next, int *
     b->previous = type;
     return 0;
 }
+/**
+ * @brief Uvolní prostředky sledování lokálních jmen a vynuluje stav.
+ * @param b Platná inicializovaná struktura; nesmí být NULL.
+ * @note Uvolňuje aktivní i čekající jména, nikoli vypůjčenou tabulku symbolů.
+ */
 void paramlists_bindings_free(ParamBindings *b) {
     for (size_t i = 0; i < b->count; i++)
         free(b->items[i].name);
